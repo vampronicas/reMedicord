@@ -111,6 +111,27 @@ interface DoseEventDao {
     @Query("DELETE FROM dose_event WHERE status = 'PLANNED' AND medicationId = :medicationId AND scheduledAt >= :fromInclusive")
     suspend fun deleteFuturePlanned(medicationId: Long, fromInclusive: Long): Int
 
+    /** Future doses the planner owns: PLANNED, or SKIPPED by a skip rule (no user action). */
+    @Query(
+        """DELETE FROM dose_event WHERE medicationId = :medicationId AND scheduledAt >= :fromInclusive
+           AND (status = 'PLANNED' OR (status = 'SKIPPED' AND actionAt IS NULL))""",
+    )
+    suspend fun deleteFutureAuto(medicationId: Long, fromInclusive: Long): Int
+
+    /** Doses waiting for a reminder (PLANNED / SNOOZED / DUE) with remindAt in [from, to). */
+    @Query(
+        """SELECT * FROM dose_event WHERE status IN ('PLANNED','SNOOZED','DUE') AND remindAt >= :fromInclusive
+           AND remindAt < :toExclusive ORDER BY remindAt""",
+    )
+    suspend fun awaitingReminder(fromInclusive: Long, toExclusive: Long): List<DoseEventEntity>
+
+    /** Doses in an original slot that still need an answer. */
+    @Query("SELECT * FROM dose_event WHERE slotId = :slotId AND status IN ('DUE','SNOOZED','PLANNED') ORDER BY remindAt, medicationId")
+    suspend fun openInSlot(slotId: Long): List<DoseEventEntity>
+
+    @Query("SELECT * FROM dose_event WHERE status IN ('DUE','SNOOZED')")
+    suspend fun dueOrSnoozed(): List<DoseEventEntity>
+
     @Query("SELECT * FROM dose_event ORDER BY id")
     suspend fun getAll(): List<DoseEventEntity>
 }

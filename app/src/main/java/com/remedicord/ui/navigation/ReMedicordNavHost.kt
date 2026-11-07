@@ -28,6 +28,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.collectAsState
+import com.remedicord.ui.health.HealthScreen
+import com.remedicord.ui.health.HealthViewModel
+import com.remedicord.ui.health.OnboardingScreen
 import com.remedicord.ui.history.HistoryScreen
 import com.remedicord.ui.lock.LockScreen
 import com.remedicord.ui.lock.LockViewModel
@@ -46,6 +50,7 @@ import kotlinx.serialization.Serializable
 @Serializable object SettingsRoute
 @Serializable data class EditorRoute(val id: Long = 0)
 @Serializable data class DetailRoute(val id: Long)
+@Serializable object HealthRoute
 
 private data class Tab(val label: String, val icon: ImageVector, val route: Any)
 
@@ -61,7 +66,16 @@ private val tabs = listOf(
 fun ReMedicordNavHost() {
     IncognitoKeyboard {
         val lockVm: LockViewModel = hiltViewModel()
-        if (rememberLocked(lockVm)) LockScreen(lockVm) else MainApp()
+        if (rememberLocked(lockVm)) LockScreen(lockVm)
+        else {
+            val healthVm: HealthViewModel = hiltViewModel()
+            val onboarded by healthVm.onboarded.collectAsState()
+            when (onboarded) {
+                null -> Unit
+                false -> OnboardingScreen(healthVm) {}
+                true -> MainApp()
+            }
+        }
     }
 }
 
@@ -96,7 +110,8 @@ private fun MainApp() {
                     MedicationsScreen(hiltViewModel(), onAdd = { nav.navigate(EditorRoute()) }, onOpen = { nav.navigate(DetailRoute(it)) })
                 }
                 composable<HistoryRoute> { HistoryScreen(hiltViewModel()) }
-                composable<SettingsRoute> { SettingsScreen(hiltViewModel()) }
+                composable<SettingsRoute> { SettingsScreen(hiltViewModel(), onHealth = { nav.navigate(HealthRoute) }) }
+                composable<HealthRoute> { HealthScreen(hiltViewModel()) }
                 composable<EditorRoute> { EditorScreen(hiltViewModel(), onDone = { nav.popBackStack() }) }
                 composable<DetailRoute> { DetailScreen(hiltViewModel(), onBack = { nav.popBackStack() }, onEdit = { nav.navigate(EditorRoute(it)) }) }
             }

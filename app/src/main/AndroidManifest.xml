@@ -6,6 +6,18 @@
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
+    <!-- The complete permission list (PLAN.md §5). Enforced by verifyReleaseManifestSecurity. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Personal sideloaded reminder app: reminders must survive OEM battery savers (PLAN.md §5). -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+
     <application
         android:name=".ReMedicordApp"
         android:allowBackup="false"
@@ -27,6 +39,40 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Full-screen reminder (S10). Not exported; opened only by the app's own immutable PendingIntents. -->
+        <activity
+            android:name=".reminders.AlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+
+        <!-- Reminder alarms: not exported; direct-boot aware so reminders ring before the first unlock. -->
+        <receiver
+            android:name=".reminders.ReminderReceiver"
+            android:directBootAware="true"
+            android:exported="false" />
+
+        <receiver
+            android:name=".reminders.DoseActionReceiver"
+            android:exported="false" />
+
+        <!-- System events still reach non-exported receivers because they come from the OS itself. -->
+        <receiver
+            android:name=".reminders.SystemEventReceiver"
+            android:directBootAware="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Pulled in indirectly by Compose: an exported (DUMP-protected) receiver. Not needed; removed
              so that NOTHING except the launcher is exported. Verified by verifyReleaseManifestSecurity. -->

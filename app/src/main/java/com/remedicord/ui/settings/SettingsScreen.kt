@@ -24,7 +24,11 @@ import androidx.lifecycle.viewModelScope
 import com.remedicord.core.lock.AppLockManager
 import com.remedicord.core.lock.PinRepository
 import com.remedicord.data.repo.SettingsRepository
+import com.remedicord.domain.usecase.Replanner
+import com.remedicord.reminders.ReminderSettings
+import com.remedicord.reminders.ReminderSettingsRepository
 import com.remedicord.ui.components.ChoiceChips
+import com.remedicord.ui.components.LabeledSwitch
 import com.remedicord.ui.components.SectionTitle
 import com.remedicord.ui.lock.PinPad
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,9 +44,22 @@ class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val pins: PinRepository,
     private val lock: AppLockManager,
+    private val reminderSettings: ReminderSettingsRepository,
+    private val replanner: Replanner,
 ) : ViewModel() {
     private val _timeout = MutableStateFlow((lock.timeoutMs / 60_000).toInt())
     val timeoutMin: StateFlow<Int> = _timeout
+    private val _reminders = MutableStateFlow(ReminderSettings())
+    val reminders: StateFlow<ReminderSettings> = _reminders
+
+    init { viewModelScope.launch { _reminders.value = reminderSettings.load() } }
+
+    fun updateReminders(f: (ReminderSettings) -> ReminderSettings) = viewModelScope.launch {
+        val s = f(_reminders.value)
+        reminderSettings.save(s)
+        _reminders.value = s
+        replanner.replan()
+    }
 
     fun setTimeout(min: Int) = viewModelScope.launch {
         settings.put(AppLockManager.SETTING_TIMEOUT_MIN, min.toString())
@@ -54,17 +71,31 @@ class SettingsViewModel @Inject constructor(
         withContext(Dispatchers.Default) { pins.changePin(current, new) }
 }
 
-/** S12 (partial; completed in Phase 7): PIN and lock settings. Reminder settings arrive in Phase 4. */
+/** S12: lock, PIN and reminder settings (backup settings arrive in Phase 6). */
 @Composable
-fun SettingsScreen(vm: SettingsViewModel, extra: @Composable () -> Unit = {}) {
+fun SettingsScreen(vm: SettingsViewModel, onHealth: () -> Unit) {
     val timeout by vm.timeoutMin.collectAsState()
+    val r by vm.reminders.collectAsState()
     var changing by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionTitle("Reminders")
+        Button(onClick = onHealth) { Text("Reminder health check") }
+        Text("Default snooze")
+        ChoiceChips(listOf(5, 10, 15, 30), r.snoozeMinutes, { "$it min" }) { m -> vm.updateReminders { it.copy(snoozeMinutes = m) } }
+        Text("If there's no answer, remind again every")
+        ChoiceChips(listOf(5, 10, 15), r.repeatMinutes, { "$it min" }) { m -> vm.updateReminders { it.copy(repeatMinutes = m) } }
+        Text("…this many times before marking the dose missed")
+        ChoiceChips(listOf(1, 2, 3, 5), r.maxRepeats, { "$it×" }) { m -> vm.updateReminders { it.copy(maxRepeats = m) } }
+        Text("Maximum snoozes per dose")
+        ChoiceChips(listOf(1, 2, 3, 5), r.maxSnoozes, { "$it" }) { m -> vm.updateReminders { it.copy(maxSnoozes = m) } }
+        Text("Gap between different eye drops")
+        ChoiceChips(listOf(3, 5, 10), r.eyeDropGapMinutes, { "$it min" }) { m -> vm.updateReminders { it.copy(eyeDropGapMinutes = m) } }
+        LabeledSwitch("Full-screen alarm (generic on the lock screen)", r.fullScreen) { b -> vm.updateReminders { it.copy(fullScreen = b) } }
+
         SectionTitle("App lock")
         Text("Lock again after the app has been in the background for:")
         ChoiceChips(AppLockManager.TIMEOUT_CHOICES_MIN, timeout, { if (it == 0) "Immediately" else "$it min" }, vm::setTimeout)
         Button(onClick = { changing = true }) { Text("Change PIN") }
-        extra()
     }
     if (changing) ChangePinDialog(vm) { changing = false }
 }
