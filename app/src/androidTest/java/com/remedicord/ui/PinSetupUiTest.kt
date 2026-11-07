@@ -27,6 +27,10 @@ class PinSetupUiTest {
         type("1357"); type("1358")
         rule.onNodeWithText("PINs didn't match. Start again.").assertIsDisplayed()
         type("1357"); type("1357")
+        // First launch continues with the reminder setup (S1); it explains each item and can be skipped.
+        rule.waitUntil(15_000) { rule.onAllNodesWithTextExists("Set up reminders") }
+        rule.onNodeWithText("Battery: Unrestricted", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Skip for now", substring = true).performClick()
         rule.waitUntil(15_000) { rule.onAllNodesWithTextExists("Medicines") }
     }
 

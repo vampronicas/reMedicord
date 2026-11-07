@@ -379,7 +379,16 @@ Every phase also requires **`gradlew verifyAll` to pass** (all automated tests +
 - **Done when:** `gradlew assembleRelease` produces a signed APK that installs and opens, and the merged manifest has no INTERNET.
 
 ### Progress log (2026-11-07)
-Phases 0–5 are built. Each has passed `verifyFast` (unit tests, coverage gate ≥ 90% (actual 96%), lint with warnings as errors, manifest security gate) plus a signed release build. **Emulator (instrumented) tests are written and compile, but haven't been run yet**, because the PC's Windows page file is disabled (not enough virtual memory for an emulator). Decisions made during the build:
+**Phases 0–6 are built, and `gradlew verifyAll` passes:**
+- 74 unit tests and 31 instrumented tests on the managed emulator (Pixel 6, API 34 ATD).
+- Coverage 97.7% (domain + backup validation).
+- Lint (warnings as errors), the manifest security gate, and a signed release build.
+
+The first emulator run found 1 app bug and 2 test bugs, all fixed:
+- **App bug:** the planner deleted and re-inserted upcoming doses on every re-plan, which changed their ids, so a stale id from a screen or notification would silently do nothing. It now updates rows in place, and a test checks that ids stay stable.
+- **Test bugs:** a new medicine's schedule starts "now", so the gap test needed a back-dated regimen; and the PIN UI test didn't expect the first-launch reminder setup screen.
+
+Decisions made during the build:
 - **Robolectric is not used.** Its Android runtime jars download outside Gradle's checksum verification. All Android-level tests (DB, receivers, UI) run as instrumented tests on the managed emulator instead.
 - **Notification buttons:** Android allows 3, so the notification shows **Taken · Snooze (default minutes) · Skip**. The 5 / 10 / 15 snooze choices are on the full-screen alarm screen and the Today screen.
 - **Receivers** use a Hilt `EntryPoint` lookup *after* validating input (no field injection), and never build DB-backed objects before the first unlock.

@@ -29,6 +29,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.collectAsState
+import com.remedicord.ui.backup.BackupScreen
 import com.remedicord.ui.health.HealthScreen
 import com.remedicord.ui.health.HealthViewModel
 import com.remedicord.ui.health.OnboardingScreen
@@ -53,6 +54,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class DetailRoute(val id: Long)
 @Serializable object HealthRoute
 @Serializable object ReviewRoute
+@Serializable object BackupRoute
 
 private data class Tab(val label: String, val icon: ImageVector, val route: Any)
 
@@ -115,8 +117,9 @@ private fun MainApp() {
                     MedicationsScreen(hiltViewModel(), onAdd = { nav.navigate(EditorRoute()) }, onOpen = { nav.navigate(DetailRoute(it)) })
                 }
                 composable<HistoryRoute> { HistoryScreen(hiltViewModel()) }
-                composable<SettingsRoute> { SettingsScreen(hiltViewModel(), onHealth = { nav.navigate(HealthRoute) }) }
+                composable<SettingsRoute> { SettingsScreen(hiltViewModel(), onHealth = { nav.navigate(HealthRoute) }, onBackup = { nav.navigate(BackupRoute) }) }
                 composable<HealthRoute> { HealthScreen(hiltViewModel()) }
+                composable<BackupRoute> { BackupScreen(hiltViewModel()) }
                 composable<EditorRoute> { EditorScreen(hiltViewModel(), onDone = { nav.popBackStack() }) }
                 composable<DetailRoute> { DetailScreen(hiltViewModel(), onBack = { nav.popBackStack() }, onEdit = { nav.navigate(EditorRoute(it)) }) }
             }

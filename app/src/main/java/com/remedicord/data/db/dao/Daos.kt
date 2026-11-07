@@ -21,6 +21,12 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface MedicationDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(rows: List<MedicationEntity>)
+
+    @Query("DELETE FROM medication")
+    suspend fun deleteAll()
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(medication: MedicationEntity): Long
 
     @Update
@@ -41,6 +47,12 @@ interface MedicationDao {
 
 @Dao
 interface RegimenDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(rows: List<RegimenEntity>)
+
+    @Query("DELETE FROM regimen")
+    suspend fun deleteAll()
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(regimen: RegimenEntity): Long
 
@@ -70,6 +82,12 @@ interface RegimenDao {
 @Dao
 interface DoseEventDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(rows: List<DoseEventEntity>)
+
+    @Query("DELETE FROM dose_event")
+    suspend fun deleteAll()
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(dose: DoseEventEntity): Long
 
     /** For the planner: inserts new planned doses, skipping ones already present (unique med+time). */
@@ -81,6 +99,9 @@ interface DoseEventDao {
 
     @Upsert
     suspend fun upsert(dose: DoseEventEntity): Long
+
+    @androidx.room.Delete
+    suspend fun delete(dose: DoseEventEntity)
 
     @Query("SELECT * FROM dose_event WHERE id = :id")
     suspend fun get(id: Long): DoseEventEntity?
@@ -139,6 +160,12 @@ interface DoseEventDao {
 @Dao
 interface SkipRuleDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(rows: List<SkipRuleEntity>)
+
+    @Query("DELETE FROM skip_rule")
+    suspend fun deleteAll()
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(rule: SkipRuleEntity): Long
 
     @Update
@@ -156,6 +183,12 @@ interface SkipRuleDao {
 
 @Dao
 interface AuditLogDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(rows: List<AuditLogEntity>)
+
+    @Query("DELETE FROM audit_log")
+    suspend fun deleteAll()
+
     @Insert
     suspend fun insert(entry: AuditLogEntity): Long
 
@@ -168,6 +201,10 @@ interface AuditLogDao {
 
 @Dao
 interface SettingDao {
+    /** Removes user settings but keeps this phone's private/device keys (PIN, planner state). */
+    @Query("DELETE FROM setting WHERE `key` NOT LIKE 'private.%' AND `key` NOT LIKE 'planner.%' AND `key` NOT LIKE 'onboarding.%' AND `key` NOT LIKE 'backup.%'")
+    suspend fun deleteExportable()
+
     @Upsert
     suspend fun put(setting: SettingEntity)
 

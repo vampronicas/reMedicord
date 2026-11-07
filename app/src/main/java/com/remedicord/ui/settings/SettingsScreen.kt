@@ -71,9 +71,9 @@ class SettingsViewModel @Inject constructor(
         withContext(Dispatchers.Default) { pins.changePin(current, new) }
 }
 
-/** S12: lock, PIN and reminder settings (backup settings arrive in Phase 6). */
+/** S12: reminders, backup, lock and PIN settings. */
 @Composable
-fun SettingsScreen(vm: SettingsViewModel, onHealth: () -> Unit) {
+fun SettingsScreen(vm: SettingsViewModel, onHealth: () -> Unit, onBackup: () -> Unit) {
     val timeout by vm.timeoutMin.collectAsState()
     val r by vm.reminders.collectAsState()
     var changing by remember { mutableStateOf(false) }
@@ -91,6 +91,9 @@ fun SettingsScreen(vm: SettingsViewModel, onHealth: () -> Unit) {
         Text("Gap between different eye drops")
         ChoiceChips(listOf(3, 5, 10), r.eyeDropGapMinutes, { "$it min" }) { m -> vm.updateReminders { it.copy(eyeDropGapMinutes = m) } }
         LabeledSwitch("Full-screen alarm (generic on the lock screen)", r.fullScreen) { b -> vm.updateReminders { it.copy(fullScreen = b) } }
+
+        SectionTitle("Backup")
+        Button(onClick = onBackup) { Text("Backup & restore") }
 
         SectionTitle("App lock")
         Text("Lock again after the app has been in the background for:")

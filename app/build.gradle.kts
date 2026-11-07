@@ -22,7 +22,10 @@ kover {
     reports {
         variant("gate") {
             filters {
-                includes { packages("com.remedicord.domain") }
+                includes {
+                    packages("com.remedicord.domain")
+                    classes("com.remedicord.data.backup.BackupCodec*")
+                }
                 // Services that orchestrate the database are covered by instrumented tests instead.
                 excludes { classes("com.remedicord.domain.usecase.*Service*") }
             }

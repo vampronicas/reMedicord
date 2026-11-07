@@ -95,9 +95,21 @@ class ReminderPlanner(
                 continue
             }
 
-            // 5. Future doses for the next 48 h (skip rules applied).
-            dao.deleteFutureAuto(med.id, nowMs)
-            dao.insertIfAbsent(MedicationPlan.plan(regimens, zone, rules, now, until).map {
+            // 5. Future doses for the next 48 h (skip rules applied). Existing rows are updated IN PLACE so dose
+            //    ids stay stable (screens and notifications refer to them); only obsolete rows are removed.
+            val desired = MedicationPlan.plan(regimens, zone, rules, now, until).associateBy { it.at.toEpochMilli() }
+            dao.forMedication(med.id)
+                .filter { (it.scheduledAt ?: -1) >= nowMs && (it.status == DoseStatus.PLANNED || (it.status == DoseStatus.SKIPPED && it.actionAt == null)) }
+                .forEach { e ->
+                    val want = desired[e.scheduledAt]
+                    if (want == null) { dao.delete(e); return@forEach }
+                    val status = if (want.skipReason != null) DoseStatus.SKIPPED else DoseStatus.PLANNED
+                    if (e.status != status || e.regimenId != want.regimenId || e.skipReason != want.skipReason) {
+                        dao.update(e.copy(status = status, regimenId = want.regimenId, skipReason = want.skipReason,
+                            remindAt = if (status == DoseStatus.PLANNED) (e.remindAt ?: e.scheduledAt) else null, updatedAt = nowMs))
+                    }
+                }
+            dao.insertIfAbsent(desired.values.map {
                 entity(med.id, it, zone.id, nowMs, if (it.skipReason != null) DoseStatus.SKIPPED else DoseStatus.PLANNED)
             })
         }

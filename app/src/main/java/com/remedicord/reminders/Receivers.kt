@@ -25,9 +25,12 @@ interface ReceiverEntryPoint {
     fun planner(): dagger.Lazy<ReminderPlanner>
     fun scheduler(): AlarmScheduler
     fun directBoot(): DirectBootStore
+    fun backup(): dagger.Lazy<com.remedicord.data.backup.BackupService>
 }
 
 private fun deps(context: Context) = EntryPointAccessors.fromApplication(context.applicationContext, ReceiverEntryPoint::class.java)
+
+private const val BACKUP_NOTIFICATION_ID = 7
 
 private val receiverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -91,7 +94,14 @@ class SystemEventReceiver : BroadcastReceiver() {
             }
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED,
             Intent.ACTION_MY_PACKAGE_REPLACED, AlarmScheduler.ACTION_MAINTENANCE -> {
-                if (isUnlocked(context)) runAsync { deps(context).planner().get().replan() }
+                if (isUnlocked(context)) runAsync {
+                    val d = deps(context)
+                    d.planner().get().replan()
+                    // PLAN.md §7: gentle reminder when the last backup is older than the chosen interval.
+                    if (intent.action == AlarmScheduler.ACTION_MAINTENANCE && d.backup().get().shouldRemind()) {
+                        Notifications.postGeneral(context, BACKUP_NOTIFICATION_ID, "Time for a backup", "Your last reMedicord backup is a while ago. Open Settings → Backup.")
+                    }
+                }
             }
         }
     }

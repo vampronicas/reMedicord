@@ -74,6 +74,9 @@ class ReminderEngineTest {
     @Test fun phoneOffGapBecomesUnconfirmedNotMissed() = runTest {
         service.create(MedicationForm(name = "Gap test", type = MedicationType.PILL,
             rule = ScheduleRule.EveryNHours(1, LocalTime.of(0, 0)), startDate = java.time.LocalDate.now().minusDays(3)))
+        // A new medicine's schedule starts "now"; move its regimen start 3 days back so past doses exist.
+        val medId = db.medicationDao().getAll().single().id
+        db.regimenDao().forMedication(medId).single().let { db.regimenDao().update(it.copy(effectiveFrom = Instant.now().minus(Duration.ofDays(3)).toEpochMilli())) }
         // Simulate: the app last planned 6 hours ago and the phone was off since.
         db.doseEventDao().getAll().forEach { db.doseEventDao().update(it.copy(scheduledAt = null, status = DoseStatus.SKIPPED, actionAt = 1)) }
         settings.put(ReminderSettingsRepository.PLANNED_UNTIL, Instant.now().minus(Duration.ofHours(6)).toEpochMilli().toString())
@@ -93,7 +96,10 @@ class ReminderEngineTest {
         val (a, b) = db.doseEventDao().withStatus(DoseStatus.PLANNED).take(2)
         assertTrue(actions.snooze(a.id, 10, maxSnoozes = 1))
         assertTrue(!actions.snooze(a.id, 10, maxSnoozes = 1)) // limit reached
+        val idsBefore = db.doseEventDao().withStatus(DoseStatus.PLANNED).map { it.id }.toSet()
         assertTrue(actions.take(a.id))
+        // Re-planning after an action must not re-create (re-number) the other upcoming doses.
+        assertTrue(db.doseEventDao().withStatus(DoseStatus.PLANNED).map { it.id }.toSet().containsAll(idsBefore - a.id))
         assertTrue(!actions.take(a.id)) // already taken: no double recording
         assertTrue(actions.skip(b.id, "Felt unwell"))
         assertTrue(!actions.skip(b.id, " "))
