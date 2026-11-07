@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Capsule icon, drawn inside the adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-45">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M44,43 H54 V65 H44 A11,11 0 0,1 44,43 Z" />
+        <path
+            android:fillColor="#B2DFDB"
+            android:pathData="M54,43 H64 A11,11 0 0,1 64,65 H54 Z" />
+    </group>
+</vector>

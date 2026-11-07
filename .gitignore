@@ -1,0 +1,25 @@
+# --- Build output / IDE (build output is redirected outside OneDrive, these are fallbacks) ---
+build/
+.gradle/
+.kotlin/
+.idea/
+*.iml
+captures/
+.cxx/
+.externalNativeBuild/
+local.properties
+hs_err_pid*.log
+replay_pid*.log
+
+# --- SECRETS: never commit (PLAN.md §3.2 / §3.3) ---
+keystore/
+*.jks
+*.keystore
+*.p12
+keystore.properties
+
+# --- App outputs and personal data: never commit ---
+*.apk
+*.aab
+*.zip
+release/

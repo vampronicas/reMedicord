@@ -1,0 +1,27 @@
+#!/bin/sh
+# Refuses a push if any commit being pushed contains secrets or personal data (PLAN.md §3.3).
+# Enabled with: git config core.hooksPath tools/git-hooks
+
+zero=0000000000000000000000000000000000000000
+forbidden='(\.jks|\.keystore|\.p12|\.apk|\.aab|\.zip)$|(^|/)keystore\.properties$|(^|/)local\.properties$|(^|/)keystore/'
+status=0
+
+while read local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue          # branch deletion
+    if [ "$remote_sha" = "$zero" ]; then range="$local_sha"; else range="$remote_sha..$local_sha"; fi
+
+    files=$(git log --name-only --format= "$range" | sort -u | grep -Ei "$forbidden")
+    if [ -n "$files" ]; then
+        echo "pre-push BLOCKED: these files must never be pushed:" >&2
+        echo "$files" >&2
+        status=1
+    fi
+
+    if git grep -nIE '^[[:space:]]*(storePassword|keyPassword)[[:space:]]*=[[:space:]]*[A-Za-z0-9]' "$local_sha" -- \
+        ':(exclude)app/build.gradle.kts' ':(exclude)tools/git-hooks/pre-push' >&2; then
+        echo "pre-push BLOCKED: a password entry was found in the files above." >&2
+        status=1
+    fi
+done
+
+exit $status
