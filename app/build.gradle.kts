@@ -11,6 +11,20 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.room)
+    alias(libs.plugins.kover)
+}
+
+// Coverage gate (PLAN.md §11): business rules must stay >= 90% covered by JVM tests.
+kover {
+    currentProject {
+        createVariant("gate") { add("debug") }
+    }
+    reports {
+        variant("gate") {
+            filters { includes { packages("com.remedicord.domain") } }
+            verify { rule { minBound(90) } }
+        }
+    }
 }
 
 // Room schema history (committed). Also packaged into androidTest assets for migration tests.
@@ -248,8 +262,8 @@ androidComponents {
 // One command for everything that runs without an emulator (PLAN.md §11).
 tasks.register("verifyFast") {
     group = "verification"
-    description = "Unit tests + lint + manifest security checks."
-    dependsOn("testDebugUnitTest", "lintRelease", "verifyReleaseManifestSecurity")
+    description = "Unit tests + coverage gate + lint + manifest security checks."
+    dependsOn("testDebugUnitTest", "koverVerifyGate", "lintRelease", "verifyReleaseManifestSecurity")
 }
 
 // Everything, including instrumented tests on the managed emulator. Required to finish a phase.
