@@ -379,7 +379,7 @@ Every phase also requires **`gradlew verifyAll` to pass** (all automated tests +
 - **Done when:** `gradlew assembleRelease` produces a signed APK that installs and opens, and the merged manifest has no INTERNET.
 
 ### Progress log (2026-11-07)
-**Phases 0–6 are built, and `gradlew verifyAll` passes:**
+**Phases 0–7 are built (v1.0.0), and `gradlew verifyAll` passes:**
 - 74 unit tests and 31 instrumented tests on the managed emulator (Pixel 6, API 34 ATD).
 - Coverage 97.7% (domain + backup validation).
 - Lint (warnings as errors), the manifest security gate, and a signed release build.
@@ -395,32 +395,32 @@ Decisions made during the build:
 - **Removed library components** caught by the security gate: Compose's `ProfileInstallReceiver` (exported) and Room's `MultiInstanceInvalidationService`.
 - **Bugs caught by lint:** literal bidi-override characters in source (Trojan-Source pattern), and the Android 12 notification-permission check (would have silently blocked all reminders on Android 12).
 
-### Phase 1: Encrypted data layer
+### Phase 1: Encrypted data layer ✅
 - `DbKeyManager` (Keystore), Room + SQLCipher, all entities/DAOs, converters, schema export, audit logging in repos.
 - **Done when:** DAO tests pass (Robolectric, plain SQLite), and the **instrumented** tests on the emulator prove the SQLCipher DB works, can't be opened without the key, and destructive migration is disabled.
 
-### Phase 2: Domain logic (pure Kotlin, test-first)
+### Phase 2: Domain logic (pure Kotlin, test-first) ✅
 - `ScheduleRule` types, `DoseGenerator`, `SlotGrouper`, `TaperBuilder`, course/stop/skip/PRN policies, site rotation, adherence.
 - **Done when:** unit tests cover every rule type, DST gap/overlap, time-zone travel in both time-zone modes, midnight crossing, taper transitions, skip ranges, must-complete blocks, course completion and calculated extension, and gap detection → UNCONFIRMED.
 
-### Phase 3: PIN lock + medication management UI
+### Phase 3: PIN lock + medication management UI ✅
 - S0 PIN lock (in-app keypad, hashing, clock-proof attempt countdown, background timeout), PIN setup.
 - S3, S4 (all types incl. bandaging, taper builder), S5, S6, S7, S8.
 - **Done when:** you can create one of each type, change a dose, skip with each mode, and stop/complete. Blocked actions on a must-complete course show a clear explanation.
 
-### Phase 4: Reminder engine
+### Phase 4: Reminder engine ✅
 - Planner (incl. gap check), AlarmScheduler, receivers, device-protected timestamp list, grouped notifications (generic when locked, unlock required for Taken/Skip), full-screen alarm (S10), snooze/repeat/missed, eye-drop gap sequencing, daily worker, onboarding (S1), health screen (S13).
 - **Done when (on a real phone):** alarms fire on time with the screen off, after a restart **before the first unlock**, after a time-zone change, and in forced Doze (`adb shell dumpsys deviceidle force-idle`). Every notification action updates history correctly. The lock screen never shows medicine names.
 
-### Phase 5: Today and History
+### Phase 5: Today and History ✅
 - S2 (Today, "Needs review" card, PRN "Take now", late logging), S14 (review missed period), S9 (calendar, day detail, edit with audit, adherence).
 - **Done when:** a week of mixed actions shows correctly in the calendar and stats, edits appear in the audit trail, and a simulated "phone off for 2 days" produces the review prompt, with each answer updating courses correctly.
 
-### Phase 6: Backup and restore
+### Phase 6: Backup and restore ✅
 - S11, exporter/importer, validation, snapshots, CSV, backup reminder.
 - **Done when:** export → uninstall → reinstall → restore brings back identical data (automated round-trip test + manual test), corrupted or malformed/malicious ZIPs are rejected with no data change, the CSV is formula-safe, and post-restore doses go to the review prompt.
 
-### Phase 7: Polish and release
+### Phase 7: Polish and release ✅ (v1.0.0; GitHub publish pending your login)
 - S12 settings, accessibility (large text, TalkBack labels), dark mode, empty states, app icon, final R8 release build, install guide.
 - Choose a licence, run the pre-push secret check, publish to a **public** GitHub repository.
 - **Done when:** the full manual test checklist passes, the signed release APK is delivered in `release/` (git-ignored), and the repo is on GitHub with no keystore, passwords or backups in it.
