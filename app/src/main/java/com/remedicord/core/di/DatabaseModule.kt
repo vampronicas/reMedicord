@@ -29,6 +29,9 @@ object DatabaseModule {
     fun database(@ApplicationContext context: Context, keyManager: DbKeyManager): AppDatabase =
         AppDatabase.open(context, keyManager)
 
+    @Provides
+    fun auditLogDao(db: AppDatabase) = db.auditLogDao()
+
     @Provides @Singleton
     fun auditLogger(db: AppDatabase, time: TimeProvider): AuditLogger = AuditLogger(db.auditLogDao(), time)
 

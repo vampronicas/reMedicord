@@ -40,6 +40,7 @@ import com.remedicord.ui.medications.DetailScreen
 import com.remedicord.ui.medications.EditorScreen
 import com.remedicord.ui.medications.MedicationsScreen
 import com.remedicord.ui.settings.SettingsScreen
+import com.remedicord.ui.today.ReviewScreen
 import com.remedicord.ui.today.TodayScreen
 import kotlinx.serialization.Serializable
 
@@ -51,6 +52,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class EditorRoute(val id: Long = 0)
 @Serializable data class DetailRoute(val id: Long)
 @Serializable object HealthRoute
+@Serializable object ReviewRoute
 
 private data class Tab(val label: String, val icon: ImageVector, val route: Any)
 
@@ -105,7 +107,10 @@ private fun MainApp() {
     }) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             NavHost(nav, startDestination = TodayRoute) {
-                composable<TodayRoute> { TodayScreen(hiltViewModel(), onOpenMedication = { nav.navigate(DetailRoute(it)) }) }
+                composable<TodayRoute> {
+                    TodayScreen(hiltViewModel(), onOpenMedication = { nav.navigate(DetailRoute(it)) }, onReview = { nav.navigate(ReviewRoute) })
+                }
+                composable<ReviewRoute> { ReviewScreen(hiltViewModel(), onDone = { nav.popBackStack() }) }
                 composable<MedicationsRoute> {
                     MedicationsScreen(hiltViewModel(), onAdd = { nav.navigate(EditorRoute()) }, onOpen = { nav.navigate(DetailRoute(it)) })
                 }
