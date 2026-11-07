@@ -34,5 +34,10 @@
             android:name="androidx.profileinstaller.ProfileInstallReceiver"
             tools:ignore="MissingClass"
             tools:node="remove" />
+
+        <!-- Added by Room for multi-process apps; reMedicord is single-process. No services allowed. -->
+        <service
+            android:name="androidx.room.MultiInstanceInvalidationService"
+            tools:node="remove" />
     </application>
 </manifest>

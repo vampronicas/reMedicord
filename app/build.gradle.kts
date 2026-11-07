@@ -10,6 +10,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.room)
+}
+
+// Room schema history (committed). Also packaged into androidTest assets for migration tests.
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 // Release signing key lives in keystore/ (git-ignored). See docs/PLAN.md §3.2.
@@ -80,6 +86,17 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        // Headless emulator started/stopped automatically by Gradle for instrumented tests (PLAN.md §11).
+        // "aosp-atd" = Google's slimmed Automated Test Device image.
+        managedDevices {
+            localDevices {
+                create("pixel6Api34") {
+                    device = "Pixel 6"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
     }
 }
 
@@ -98,6 +115,14 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
+    // Encrypted database: Room on SQLCipher (PLAN.md §2, §3)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+    implementation(libs.androidx.sqlite)
+    implementation(libs.sqlcipher.android)
+    implementation(libs.kotlinx.coroutines.android)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
@@ -106,6 +131,9 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }
 
@@ -222,4 +250,11 @@ tasks.register("verifyFast") {
     group = "verification"
     description = "Unit tests + lint + manifest security checks."
     dependsOn("testDebugUnitTest", "lintRelease", "verifyReleaseManifestSecurity")
+}
+
+// Everything, including instrumented tests on the managed emulator. Required to finish a phase.
+tasks.register("verifyAll") {
+    group = "verification"
+    description = "verifyFast + instrumented tests on the Gradle Managed Device + signed release build."
+    dependsOn("verifyFast", "pixel6Api34DebugAndroidTest", "assembleRelease")
 }
