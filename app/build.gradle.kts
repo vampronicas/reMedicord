@@ -21,7 +21,11 @@ kover {
     }
     reports {
         variant("gate") {
-            filters { includes { packages("com.remedicord.domain") } }
+            filters {
+                includes { packages("com.remedicord.domain") }
+                // Services that orchestrate the database are covered by instrumented tests instead.
+                excludes { classes("com.remedicord.domain.usecase.*Service*") }
+            }
             verify { rule { minBound(90) } }
         }
     }
@@ -120,7 +124,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.process)
+    implementation(libs.androidx.hilt.navigation.compose)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)

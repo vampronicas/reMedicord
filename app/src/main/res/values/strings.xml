@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">reMedicord</string>
-    <string name="placeholder_title">reMedicord</string>
-    <string name="placeholder_body">Phase 0 skeleton. Offline, encrypted, private.</string>
 </resources>

@@ -22,5 +22,7 @@ class MainActivity : ComponentActivity() {
                 ReMedicordNavHost()
             }
         }
+        // Anti-tapjacking: ignore touches while another app draws over this window (PLAN.md §12.1).
+        window.decorView.filterTouchesWhenObscured = true
     }
 }

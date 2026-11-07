@@ -53,6 +53,13 @@ class MedicationRepository(
         audit.record(AuditLogger.MEDICATION, after.id, AuditAction.UPDATE, MedicationEntity.serializer(), before, after, note)
     }
 
+    /** Ends a regimen at [at] (stop). Audited. */
+    suspend fun changeRegimenEnd(regimen: RegimenEntity, at: Long, note: String? = null) = db.withTransaction {
+        val closed = regimen.copy(effectiveTo = at)
+        regimens.update(closed)
+        audit.record(AuditLogger.REGIMEN, closed.id, AuditAction.UPDATE, RegimenEntity.serializer(), regimen, closed, note)
+    }
+
     /**
      * Dose change (PLAN.md §4.2): closes the regimen in force at [newRegimen].effectiveFrom and starts the new one.
      * Returns the new regimen id.
