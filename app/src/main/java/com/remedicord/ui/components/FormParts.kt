@@ -128,7 +128,7 @@ fun TimesEditor(times: List<LocalTime>, onChange: (List<LocalTime>) -> Unit) {
     if (adding) TimePickerDialog(LocalTime.of(8, 0), { adding = false }) { t -> adding = false; if (t !in times) onChange(times + t) }
 }
 
-enum class RuleKind(val label: String) { FIXED("Times each day"), HOURS("Every N hours"), DAYS("Every N days"), CYCLIC("Cycle on/off"), PRN("As needed") }
+enum class RuleKind(val label: String) { FIXED("Times each day"), FLEX("N a day, flexible times"), HOURS("Every N hours"), DAYS("Every N days"), CYCLIC("Cycle on/off"), PRN("As needed") }
 
 /** Draft for the schedule builder; [toRule] returns null while incomplete. */
 data class RuleDraft(
@@ -146,6 +146,9 @@ data class RuleDraft(
     val daysOff: Int? = 7,
     val prnGapHours: Int? = 4,
     val prnMaxPerDay: Int? = 4,
+    val flexDoses: Int? = 2,
+    val flexPeriods: List<FlexPeriodDraft> = FlexPeriodDraft.DEFAULTS,
+    val flexGapHours: Int? = 0,
 ) {
     fun toRule(): ScheduleRule? = runCatching {
         when (kind) {
@@ -154,6 +157,7 @@ data class RuleDraft(
             RuleKind.DAYS -> ScheduleRule.EveryNDays(everyNDays!!, times, startDate)
             RuleKind.CYCLIC -> ScheduleRule.Cyclic(daysOn!!, daysOff!!, times, startDate)
             RuleKind.PRN -> ScheduleRule.AsNeeded(prnGapHours!! * 60, prnMaxPerDay!!)
+            RuleKind.FLEX -> ScheduleRule.FlexibleDaily(flexDoses!!, flexPeriods.filter { it.enabled }.map { ScheduleRule.Period(it.name, it.time) }, (flexGapHours ?: 0) * 60)
         }
     }.getOrNull()
 
@@ -165,6 +169,8 @@ data class RuleDraft(
             is ScheduleRule.EveryNDays -> RuleDraft(RuleKind.DAYS, times = rule.times, everyNDays = rule.n, startDate = rule.startDate)
             is ScheduleRule.Cyclic -> RuleDraft(RuleKind.CYCLIC, times = rule.times, daysOn = rule.daysOn, daysOff = rule.daysOff, startDate = rule.startDate)
             is ScheduleRule.AsNeeded -> RuleDraft(RuleKind.PRN, prnGapHours = rule.minGapMinutes / 60, prnMaxPerDay = rule.maxPerDay)
+            is ScheduleRule.FlexibleDaily -> RuleDraft(RuleKind.FLEX, flexDoses = rule.dosesPerDay, flexGapHours = rule.minGapMinutes / 60,
+                flexPeriods = FlexPeriodDraft.DEFAULTS.map { d -> rule.periods.firstOrNull { it.name == d.name }?.let { FlexPeriodDraft(d.name, it.time, true) } ?: d.copy(enabled = false) })
         }
     }
 }
@@ -208,6 +214,18 @@ fun ScheduleBuilder(draft: RuleDraft, onChange: (RuleDraft) -> Unit, allowPrn: B
                 DatePickerButton("Cycle starts", draft.startDate) { onChange(draft.copy(startDate = it)) }
                 TimesEditor(draft.times) { onChange(draft.copy(times = it)) }
             }
+            RuleKind.FLEX -> {
+                IntField("Doses per day", draft.flexDoses, { onChange(draft.copy(flexDoses = it)) })
+                Text("Allowed times of day (a reminder at each until the day's doses are taken)", style = MaterialTheme.typography.bodySmall)
+                draft.flexPeriods.forEachIndexed { i, p ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = p.enabled, label = { Text(p.name) },
+                            onClick = { onChange(draft.copy(flexPeriods = draft.flexPeriods.toMutableList().also { l -> l[i] = p.copy(enabled = !p.enabled) })) })
+                        if (p.enabled) AssistChip(onClick = { pick = "flex$i" }, label = { Text(p.time.toString()) })
+                    }
+                }
+                IntField("Minimum hours between doses (0 = none)", draft.flexGapHours, { onChange(draft.copy(flexGapHours = it)) })
+            }
             RuleKind.PRN -> {
                 IntField("Minimum hours between doses", draft.prnGapHours, { onChange(draft.copy(prnGapHours = it)) })
                 IntField("Maximum doses per day", draft.prnMaxPerDay, { onChange(draft.copy(prnMaxPerDay = it)) })
@@ -220,5 +238,22 @@ fun ScheduleBuilder(draft: RuleDraft, onChange: (RuleDraft) -> Unit, allowPrn: B
         "first" -> TimePickerDialog(draft.firstTime, { pick = null }) { onChange(draft.copy(firstTime = it)); pick = null }
         "qs" -> TimePickerDialog(draft.quietStart, { pick = null }) { onChange(draft.copy(quietStart = it)); pick = null }
         "qe" -> TimePickerDialog(draft.quietEnd, { pick = null }) { onChange(draft.copy(quietEnd = it)); pick = null }
+        else -> pick?.takeIf { it.startsWith("flex") }?.removePrefix("flex")?.toIntOrNull()?.let { i ->
+            TimePickerDialog(draft.flexPeriods[i].time, { pick = null }) { t ->
+                onChange(draft.copy(flexPeriods = draft.flexPeriods.toMutableList().also { l -> l[i] = l[i].copy(time = t) })); pick = null
+            }
+        }
+    }
+}
+
+/** One selectable time of day for a flexible schedule. */
+data class FlexPeriodDraft(val name: String, val time: LocalTime, val enabled: Boolean) {
+    companion object {
+        val DEFAULTS = listOf(
+            FlexPeriodDraft("Morning", LocalTime.of(8, 0), true),
+            FlexPeriodDraft("Afternoon", LocalTime.of(13, 0), true),
+            FlexPeriodDraft("Evening", LocalTime.of(19, 0), true),
+            FlexPeriodDraft("Night", LocalTime.of(22, 0), false),
+        )
     }
 }

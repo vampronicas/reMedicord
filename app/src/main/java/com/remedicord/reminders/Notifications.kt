@@ -55,9 +55,10 @@ object Notifications {
         .setContentText(ReminderText.PUBLIC_TEXT)
         .build()
 
-    private fun alarmActivityIntent(context: Context, slotId: Long, requestOffset: Int) = PendingIntent.getActivity(
+    private fun alarmActivityIntent(context: Context, slotId: Long, requestOffset: Int, openChoices: Boolean = false) = PendingIntent.getActivity(
         context, (slotId * 4 + requestOffset).toInt(),
-        Intent(context, AlarmActivity::class.java).putExtra(AlarmScheduler.EXTRA_SLOT, slotId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        Intent(context, AlarmActivity::class.java).putExtra(AlarmScheduler.EXTRA_SLOT, slotId)
+            .putExtra(AlarmActivity.EXTRA_CHOICES, openChoices).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
@@ -89,11 +90,10 @@ object Notifications {
                 NotificationCompat.Action.Builder(0, if (lines.size == 1) "Taken" else "Taken (all)", actionIntent(context, slotId, DoseActionReceiver.ACTION_TAKEN, 1))
                     .setAuthenticationRequired(true).build(),
             )
-        if (canSnooze) b.addAction(NotificationCompat.Action.Builder(0, "Snooze $snoozeMinutes min", actionIntent(context, slotId, DoseActionReceiver.ACTION_SNOOZE, 2)).build())
-        b.addAction(
-            NotificationCompat.Action.Builder(0, "Skip", actionIntent(context, slotId, DoseActionReceiver.ACTION_SKIP, 3))
-                .setAuthenticationRequired(true).build(),
-        )
+        // "Later": stop reminding, ask on the next app open. "Skip…" opens the reminder screen with all choices
+        // (skip this dose, don't remind me again today, snooze 5/10/15) — details only after unlock.
+        b.addAction(NotificationCompat.Action.Builder(0, "Later", actionIntent(context, slotId, DoseActionReceiver.ACTION_LATER, 2)).build())
+        b.addAction(NotificationCompat.Action.Builder(0, "Skip…", alarmActivityIntent(context, slotId, 3, openChoices = true)).build())
         if (fullScreen && canUseFullScreen(context)) b.setFullScreenIntent(alarmActivityIntent(context, slotId, 0), true)
         notifySafely(context, slotId.toInt(), b.build())
     }

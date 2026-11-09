@@ -53,7 +53,7 @@ class MedicationServiceTest {
     @After fun tearDown() { db.close(); context.deleteDatabase("svc-test.db"); keys.deleteAllKeyMaterial() }
 
     private val daily = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)))
-    private fun form(type: MedicationType = MedicationType.PILL, must: Boolean = false) = MedicationForm(
+    private fun form(type: MedicationType = MedicationType.PILL, must: Boolean = false) = MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", 
         name = "Test ${type.name}", type = type, rule = daily, unit = DoseUnit.TABLET,
         side = if (type == MedicationType.EYE_DROP || type == MedicationType.EAR_DROP) BodySide.LEFT else null,
         mustComplete = must, courseMode = if (must) CourseMode.DAYS else CourseMode.NONE, courseLength = if (must) 7 else null,

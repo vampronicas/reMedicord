@@ -43,6 +43,7 @@ import com.remedicord.ui.medications.MedicationsScreen
 import com.remedicord.ui.settings.SettingsScreen
 import com.remedicord.ui.today.ReviewScreen
 import com.remedicord.ui.today.TodayScreen
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 
 // Type-safe routes (PLAN.md §8).
@@ -89,6 +90,14 @@ private fun MainApp() {
     val entry by nav.currentBackStackEntryAsState()
     val dest = entry?.destination
     val showBar = tabs.any { t -> dest?.hasRoute(t.route::class) == true }
+    // Each time the app is opened (after the PIN): ask about doses waiting for an answer ("Later", phone off, paused).
+    val prompt: com.remedicord.ui.today.ReviewPromptViewModel = hiltViewModel()
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (prompt.hasPending()) {
+            androidx.compose.runtime.snapshotFlow { nav.currentBackStackEntry }.first { it != null } // graph is ready
+            nav.navigate(ReviewRoute)
+        }
+    }
     Scaffold(bottomBar = {
         if (showBar) NavigationBar {
             tabs.forEach { t ->

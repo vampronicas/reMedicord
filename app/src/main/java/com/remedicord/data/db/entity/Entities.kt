@@ -1,6 +1,9 @@
 package com.remedicord.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
+import com.remedicord.domain.model.MedicationPurpose
+import com.remedicord.domain.model.PendingReason
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -55,6 +58,11 @@ data class MedicationEntity(
     val homeZone: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
+    /** Why the medicine is taken (schema v2). */
+    @ColumnInfo(defaultValue = "TREATMENT") val purpose: MedicationPurpose = MedicationPurpose.TREATMENT,
+    @ColumnInfo(defaultValue = "") val purposeNote: String = "",
+    /** "Don't remind me again today": no reminder alarms before this instant (schema v2). */
+    val remindersMutedUntil: Long? = null,
 )
 
 @Serializable
@@ -129,6 +137,8 @@ data class DoseEventEntity(
     val isPrn: Boolean = false,
     val createdAt: Long,
     val updatedAt: Long,
+    /** Why the dose is UNCONFIRMED (schema v2). */
+    val pendingReason: PendingReason? = null,
 )
 
 @Serializable

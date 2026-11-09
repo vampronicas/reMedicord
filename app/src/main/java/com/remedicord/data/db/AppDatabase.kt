@@ -30,7 +30,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         AuditLogEntity::class,
         SettingEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -45,8 +45,19 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         const val DB_NAME = "remedicord.db"
 
+        /** v1 → v2: medicine purpose, "don't remind today", why a dose awaits an answer. Keeps all data. */
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE medication ADD COLUMN purpose TEXT NOT NULL DEFAULT 'TREATMENT'")
+                db.execSQL("ALTER TABLE medication ADD COLUMN purposeNote TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE medication ADD COLUMN remindersMutedUntil INTEGER")
+                db.execSQL("ALTER TABLE dose_event ADD COLUMN pendingReason TEXT")
+                db.execSQL("UPDATE dose_event SET pendingReason = 'APP_NOT_RUNNING' WHERE status = 'UNCONFIRMED'")
+            }
+        }
+
         /** Migrations are added here as the schema evolves. Each one gets a test (PLAN.md §6, §11). */
-        val MIGRATIONS = emptyArray<androidx.room.migration.Migration>()
+        val MIGRATIONS = arrayOf<androidx.room.migration.Migration>(MIGRATION_1_2)
 
         /**
          * Opens the SQLCipher-encrypted database (PLAN.md §3).

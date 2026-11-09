@@ -37,6 +37,7 @@ object DoseGenerator {
         when (val rule = reg.rule) {
             is ScheduleRule.AsNeeded -> emptyList()
             is ScheduleRule.EveryNHours -> everyNHours(rule, reg.effectiveFrom, zone, from, to)
+            is ScheduleRule.FlexibleDaily -> daily(zone, from, to) { rule.periods.map { it.time } }
             is ScheduleRule.FixedTimes -> daily(zone, from, to) { date ->
                 if (rule.daysOfWeek.isEmpty() || date.dayOfWeek in rule.daysOfWeek) rule.times else emptyList()
             }

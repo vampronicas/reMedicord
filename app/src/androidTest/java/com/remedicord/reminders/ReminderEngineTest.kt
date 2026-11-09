@@ -64,7 +64,7 @@ class ReminderEngineTest {
     private fun soon(minutes: Long) = LocalTime.now(ZoneId.systemDefault()).plusMinutes(minutes).withSecond(0).withNano(0)
 
     @Test fun replanCreatesDosesAndAnExactAlarm() = runTest {
-        service.create(MedicationForm(name = "Planner test", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(soon(30)))))
+        service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Planner test", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(soon(30)))))
         val planned = db.doseEventDao().withStatus(DoseStatus.PLANNED)
         assertTrue(planned.isNotEmpty())
         assertNotNull(context.getSystemService(AlarmManager::class.java).nextAlarmClock)
@@ -72,7 +72,7 @@ class ReminderEngineTest {
     }
 
     @Test fun phoneOffGapBecomesUnconfirmedNotMissed() = runTest {
-        service.create(MedicationForm(name = "Gap test", type = MedicationType.PILL,
+        service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Gap test", type = MedicationType.PILL,
             rule = ScheduleRule.EveryNHours(1, LocalTime.of(0, 0)), startDate = java.time.LocalDate.now().minusDays(3)))
         // A new medicine's schedule starts "now"; move its regimen start 3 days back so past doses exist.
         val medId = db.medicationDao().getAll().single().id
@@ -92,7 +92,7 @@ class ReminderEngineTest {
     }
 
     @Test fun takeSnoozeSkipAreAuditedAndValidated() = runTest {
-        service.create(MedicationForm(name = "Action test", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(soon(60), soon(120)))))
+        service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Action test", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(soon(60), soon(120)))))
         val (a, b) = db.doseEventDao().withStatus(DoseStatus.PLANNED).take(2)
         assertTrue(actions.snooze(a.id, 10, maxSnoozes = 1))
         assertTrue(!actions.snooze(a.id, 10, maxSnoozes = 1)) // limit reached

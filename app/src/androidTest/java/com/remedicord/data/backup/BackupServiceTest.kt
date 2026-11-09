@@ -55,14 +55,14 @@ class BackupServiceTest {
     private suspend fun all() = listOf(db.medicationDao().getAll(), db.regimenDao().getAll(), db.skipRuleDao().getAll(), db.auditLogDao().getAll())
 
     @Test fun exportWipeRestoreIsIdenticalAndPinIsKept() = runTest {
-        service.create(MedicationForm(name = "Timolol", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0)))))
+        service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Timolol", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0)))))
         settings.put("reminder.snoozeMinutes", "15")
         settings.put(SettingsRepository.PRIVATE_PREFIX + "pin.hash", "PIN-ON-THIS-PHONE")
         val before = all()
         val bytes = ByteArrayOutputStream().also { backup.export(it) }.toByteArray()
         assertTrue(!String(bytes, Charsets.ISO_8859_1).contains("PIN-ON-THIS-PHONE"))
 
-        service.create(MedicationForm(name = "Added later", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(9, 0)))))
+        service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Added later", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(9, 0)))))
         settings.put("reminder.snoozeMinutes", "5")
 
         val preview = backup.preview(ByteArrayInputStream(bytes))
@@ -75,7 +75,7 @@ class BackupServiceTest {
     }
 
     @Test fun invalidFileChangesNothing() = runTest {
-        service.create(MedicationForm(name = "Keep me", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0)))))
+        service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Keep me", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0)))))
         val before = all()
         try { backup.restore(ByteArrayInputStream("garbage".toByteArray())); fail() } catch (_: BackupException) {}
         assertEquals(before, all())

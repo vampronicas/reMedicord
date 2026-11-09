@@ -33,7 +33,7 @@ object CoursePolicy {
                 val start = course.startDate ?: return null
                 val from = DoseGenerator.resolve(start.atStartOfDay(), zone)
                 val to = DoseGenerator.resolve(start.plusDays(length.toLong()).atStartOfDay(), zone)
-                DoseGenerator.generate(regimens, zone, from, to).size
+                FlexiblePolicy.countable(DoseGenerator.generate(regimens, zone, from, to), regimens, zone).size
             }
         }
     }
@@ -68,7 +68,7 @@ object CoursePolicy {
         var start = from
         repeat(26) {
             val end = start.plus(Duration.ofDays(28))
-            out += DoseGenerator.generate(regimens, zone, start, end).map { it.at }
+            out += FlexiblePolicy.countable(DoseGenerator.generate(regimens, zone, start, end), regimens, zone).map { it.at }
             if (out.size >= remaining) return out.take(remaining)
             start = end
         }

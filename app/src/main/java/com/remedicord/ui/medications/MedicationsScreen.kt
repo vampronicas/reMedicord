@@ -67,7 +67,7 @@ fun MedicationsScreen(vm: MedicationsViewModel, onAdd: () -> Unit, onOpen: (Long
                     ListItem(
                         headlineContent = { Text(m.name) },
                         supportingContent = {
-                            Text(Labels.type(m.type) + (if (m.mustComplete) " · must complete" else "") +
+                            Text(Labels.type(m.type) + " · " + Labels.purpose(m.purpose).substringBefore(" (") + (if (m.mustComplete) " · must complete" else "") +
                                 (m.stopReason?.let { " · " + Labels.stopReason(it) } ?: ""))
                         },
                         modifier = Modifier.clickable { onOpen(m.id) },

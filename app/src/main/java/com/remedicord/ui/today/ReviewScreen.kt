@@ -66,7 +66,8 @@ fun ReviewScreen(vm: ReviewViewModel, onDone: () -> Unit) {
     LaunchedEffect(groups) { if (groups?.isEmpty() == true) onDone() }
     val g = groups ?: return
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("While reMedicord wasn't running, these doses were due:", style = MaterialTheme.typography.titleMedium)
+        Text("Did you take these?", style = MaterialTheme.typography.titleLarge)
+        Text("Answer now or later from Today. Doses not answered within 5 days are recorded as missed.", style = MaterialTheme.typography.bodySmall)
         val all = g.flatMap { it.second }.map { it.id }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { vm.answer(all, ReviewAnswer.TAKEN) }) { Text("All taken") }
@@ -77,7 +78,10 @@ fun ReviewScreen(vm: ReviewViewModel, onDone: () -> Unit) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(med.name + if (med.mustComplete) " (must complete)" else "", style = MaterialTheme.typography.titleSmall)
                     ds.forEach { d ->
-                        Text(Labels.dateTime(Instant.ofEpochMilli(d.scheduledAt ?: 0)))
+                        Text(Labels.dateTime(Instant.ofEpochMilli(d.scheduledAt ?: 0)), style = MaterialTheme.typography.bodyLarge)
+                        Text(Labels.pending(d.pendingReason) + " · counts as missed if not answered by " +
+                            Labels.date(Instant.ofEpochMilli(d.scheduledAt ?: 0).plus(java.time.Duration.ofDays(com.remedicord.domain.policy.AmendPolicy.WINDOW_DAYS))),
+                            style = MaterialTheme.typography.bodySmall)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { vm.answer(listOf(d.id), ReviewAnswer.TAKEN) }) { Text("Taken") }
                             OutlinedButton(onClick = { vm.answer(listOf(d.id), ReviewAnswer.MISSED) }) { Text("Missed") }
@@ -88,4 +92,10 @@ fun ReviewScreen(vm: ReviewViewModel, onDone: () -> Unit) {
             }
         }
     }
+}
+
+/** Decides whether to open the review prompt when the app is opened (after the PIN). */
+@HiltViewModel
+class ReviewPromptViewModel @Inject constructor(private val doses: DoseRepository) : ViewModel() {
+    suspend fun hasPending(): Boolean = doses.countUnconfirmed() > 0
 }

@@ -58,6 +58,7 @@ class MedicationService(
         val startInstant = maxOf(DoseGenerator.resolve(form.startDate.atStartOfDay(), zone).toEpochMilli(), now)
         val med = MedicationEntity(
             name = form.name.trim(), type = form.type, instructions = form.instructions.trim(),
+            purpose = form.purpose!!, purposeNote = form.purposeNote.trim(),
             foodRelation = form.foodRelation, side = form.side,
             bodyLocation = form.bodyLocation.trim().ifEmpty { null }, dressingType = form.dressingType.trim().ifEmpty { null },
             enabledSites = form.sites.map(String::trim).ifEmpty { null },
@@ -81,17 +82,18 @@ class MedicationService(
 
     suspend fun updateDetails(updated: MedicationEntity): ActionResult {
         val f = MedicationForm(name = updated.name, type = updated.type, instructions = updated.instructions, side = updated.side,
+            purpose = updated.purpose, purposeNote = updated.purposeNote,
             bodyLocation = updated.bodyLocation.orEmpty(), dressingType = updated.dressingType.orEmpty(), sites = updated.enabledSites.orEmpty(),
             rule = ScheduleRule.AsNeeded(0, 1))
         val errors = FormValidator.validate(f)
         if (errors.isNotEmpty()) return ActionResult.Invalid(errors)
-        meds.update(updated.copy(name = updated.name.trim()), "Details edited")
+        meds.update(updated.copy(name = updated.name.trim(), purposeNote = updated.purposeNote.trim()), "Details edited")
         replanner.replan()
         return ActionResult.Done
     }
 
     suspend fun changeDose(medicationId: Long, amount: BigDecimal, unit: DoseUnit, rule: ScheduleRule, effectiveFrom: Instant, reason: String): ActionResult {
-        val f = MedicationForm(name = "x", amount = amount, unit = unit, rule = rule)
+        val f = MedicationForm(name = "x", purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "x", amount = amount, unit = unit, rule = rule)
         val errors = FormValidator.validate(f) + if (reason.isBlank() || reason.length > 200) listOf("Enter a reason (max 200)") else emptyList()
         if (errors.isNotEmpty()) return ActionResult.Invalid(errors)
         val from = maxOf(effectiveFrom.toEpochMilli(), time.nowMillis())

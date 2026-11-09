@@ -65,7 +65,7 @@ class BackupService(
             // Doses that were waiting at export time can't be known now: they go to the review prompt.
             db.doseEventDao().insertAll(s.doses.map { d ->
                 if (d.status in setOf(DoseStatus.PLANNED, DoseStatus.DUE, DoseStatus.SNOOZED) && (d.scheduledAt ?: Long.MAX_VALUE) < nowMs)
-                    d.copy(status = DoseStatus.UNCONFIRMED, remindAt = null) else d
+                    d.copy(status = DoseStatus.UNCONFIRMED, remindAt = null, pendingReason = com.remedicord.domain.model.PendingReason.RESTORED) else d
             })
             db.skipRuleDao().insertAll(s.skipRules)
             db.auditLogDao().insertAll(s.audit)

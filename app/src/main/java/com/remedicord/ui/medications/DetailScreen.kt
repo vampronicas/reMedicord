@@ -152,6 +152,7 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit
     Scaffold(topBar = { TopAppBar(title = { Text(m.name) }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }) }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("${Labels.type(m.type)} · ${m.status.name.lowercase().replaceFirstChar(Char::uppercase)}" + (if (m.mustComplete) " · must complete" else ""))
+            Text("Why: ${Labels.purpose(m.purpose)}" + (m.purposeNote.takeIf { it.isNotBlank() }?.let { " — $it" } ?: ""))
             m.side?.let { Text("Side: ${Labels.side(it)}") }
             m.bodyLocation?.let { Text("Location: $it") }
             m.dressingType?.let { Text("Dressing: $it") }

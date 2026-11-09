@@ -67,6 +67,32 @@ sealed interface ScheduleRule {
         }
     }
 
+    /**
+     * [dosesPerDay] doses a day at any of the chosen [periods] (e.g. 2 of morning / afternoon / evening).
+     * A reminder is given at each period until enough doses are taken that day; the rest become NOT_NEEDED.
+     */
+    @Serializable @SerialName("flexible_daily")
+    data class FlexibleDaily(
+        val dosesPerDay: Int,
+        val periods: List<Period>,
+        /** Optional minimum gap between two doses (0 = none). */
+        val minGapMinutes: Int = 0,
+    ) : ScheduleRule {
+        init {
+            require(periods.isNotEmpty() && periods.size <= 6) { "Choose 1–6 times of day" }
+            require(periods.map { it.time }.toSet().size == periods.size) { "Times of day must differ" }
+            require(dosesPerDay in 1..periods.size) { "Doses per day must be 1–${periods.size}" }
+            require(minGapMinutes in 0..(12 * 60)) { "Minimum gap must be 0–12 hours" }
+        }
+    }
+
+    @Serializable
+    data class Period(val name: String, @Serializable(LocalTimeSerializer::class) val time: LocalTime) {
+        init {
+            require(name.isNotBlank() && name.length <= 20 && name.none { it.isISOControl() }) { "Invalid period name" }
+        }
+    }
+
     /** As needed (PRN): no reminders, only limits. */
     @Serializable @SerialName("as_needed")
     data class AsNeeded(val minGapMinutes: Int, val maxPerDay: Int) : ScheduleRule {

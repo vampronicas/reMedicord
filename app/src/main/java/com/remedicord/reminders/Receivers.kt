@@ -77,9 +77,8 @@ class DoseActionReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_TAKEN = "com.remedicord.action.TAKEN"
-        const val ACTION_SNOOZE = "com.remedicord.action.SNOOZE"
-        const val ACTION_SKIP = "com.remedicord.action.SKIP"
-        val ACTIONS = setOf(ACTION_TAKEN, ACTION_SNOOZE, ACTION_SKIP)
+        const val ACTION_LATER = "com.remedicord.action.LATER"
+        val ACTIONS = setOf(ACTION_TAKEN, ACTION_LATER)
     }
 }
 

@@ -7,6 +7,8 @@ import com.remedicord.data.repo.MedicationRepository
 import com.remedicord.domain.model.DoseStatus
 import com.remedicord.domain.model.MedicationType
 import com.remedicord.domain.model.ScheduleRule
+import com.remedicord.domain.model.PendingReason
+import com.remedicord.domain.policy.AmendPolicy
 import com.remedicord.domain.policy.PrnPolicy
 import com.remedicord.domain.policy.SiteRotation
 import com.remedicord.domain.schedule.SlotGrouper
@@ -73,10 +75,41 @@ class DoseActionService(
         return true
     }
 
+    /** "Got it, I'll take it later": stop reminding; ask on the next app open (needs an answer within 5 days). */
+    suspend fun later(doseId: Long): Boolean {
+        val d = doses.get(doseId) ?: return false
+        if (d.status !in actionable) return false
+        doses.update(d.copy(status = DoseStatus.UNCONFIRMED, pendingReason = PendingReason.LATER, remindAt = null, actionAt = time.nowMillis()), "Later")
+        replanner.replan()
+        return true
+    }
+
+    /**
+     * "Don't remind me again today" for a medicine: no more reminders until local midnight. The open dose(s) and the
+     * rest of today's doses turn into "needs your answer" so they can be filled in later. Nothing is marked skipped.
+     */
+    suspend fun pauseToday(medicationId: Long): Boolean {
+        val med = meds.get(medicationId) ?: return false
+        val midnight = com.remedicord.domain.schedule.DoseGenerator.resolve(java.time.LocalDate.now(time.zone()).plusDays(1).atStartOfDay(), time.zone())
+        meds.update(med.copy(remindersMutedUntil = midnight.toEpochMilli()), "Reminders paused for today")
+        doses.forMedication(medicationId).filter { it.status == DoseStatus.DUE || it.status == DoseStatus.SNOOZED }.forEach {
+            doses.update(it.copy(status = DoseStatus.UNCONFIRMED, pendingReason = PendingReason.PAUSED_TODAY, remindAt = null, actionAt = time.nowMillis()), "Paused for today")
+        }
+        replanner.replan()
+        return true
+    }
+
+    /** Past records can be changed for 5 days (today + 4 previous days). */
+    fun amendable(d: DoseEventEntity): Boolean {
+        val at = d.scheduledAt ?: d.takenAt ?: return true
+        return AmendPolicy.canAmend(Instant.ofEpochMilli(at).atZone(time.zone()).toLocalDate(), java.time.LocalDate.now(time.zone()))
+    }
+
     /** "I took it at hh:mm" for a MISSED (or UNCONFIRMED) dose. The time can't be in the future. */
     suspend fun logLate(doseId: Long, takenAt: Instant): Boolean {
         val d = doses.get(doseId) ?: return false
         if (d.status != DoseStatus.MISSED && d.status != DoseStatus.UNCONFIRMED) return false
+        if (!amendable(d)) return false
         if (takenAt.isAfter(time.now())) return false
         doses.update(d.copy(status = DoseStatus.TAKEN, takenAt = takenAt.toEpochMilli(), actionAt = time.nowMillis(), isLateLog = true,
             site = d.site ?: suggestSite(d.medicationId)), "Logged late")
@@ -89,15 +122,15 @@ class DoseActionService(
     /** Answer for an UNCONFIRMED dose from the review prompt (PLAN.md S14). */
     suspend fun review(doseId: Long, answer: ReviewAnswer, takenAt: Instant? = null, reason: String? = null): Boolean {
         val d = doses.get(doseId) ?: return false
-        if (d.status != DoseStatus.UNCONFIRMED) return false
+        if (d.status != DoseStatus.UNCONFIRMED || !amendable(d)) return false
         val now = time.nowMillis()
         val updated = when (answer) {
             ReviewAnswer.TAKEN -> {
                 val t = (takenAt ?: Instant.ofEpochMilli(d.scheduledAt ?: now)).let { if (it.isAfter(time.now())) time.now() else it }
-                d.copy(status = DoseStatus.TAKEN, takenAt = t.toEpochMilli(), isLateLog = true, site = d.site ?: suggestSite(d.medicationId))
+                d.copy(status = DoseStatus.TAKEN, pendingReason = null, takenAt = t.toEpochMilli(), isLateLog = true, site = d.site ?: suggestSite(d.medicationId))
             }
-            ReviewAnswer.MISSED -> d.copy(status = DoseStatus.MISSED)
-            ReviewAnswer.SKIPPED -> d.copy(status = DoseStatus.SKIPPED, skipReason = reason?.trim()?.take(200)?.ifBlank { null } ?: "Not taken while app was off")
+            ReviewAnswer.MISSED -> d.copy(status = DoseStatus.MISSED, pendingReason = null)
+            ReviewAnswer.SKIPPED -> d.copy(status = DoseStatus.SKIPPED, pendingReason = null, skipReason = reason?.trim()?.take(200)?.ifBlank { null } ?: "Not taken")
         }
         doses.update(updated.copy(actionAt = now, remindAt = null), "Reviewed: $answer")
         return true
@@ -126,6 +159,7 @@ class DoseActionService(
     suspend fun edit(doseId: Long, status: DoseStatus, takenAt: Instant?, note: String?): Boolean {
         val d = doses.get(doseId) ?: return false
         if (status !in setOf(DoseStatus.TAKEN, DoseStatus.MISSED, DoseStatus.SKIPPED)) return false
+        if (!amendable(d)) return false
         if (takenAt != null && takenAt.isAfter(time.now())) return false
         if (note != null && (note.length > FormValidator.MAX_TEXT || !FormValidator.cleanText(note, true))) return false
         doses.update(d.copy(status = status, takenAt = if (status == DoseStatus.TAKEN) (takenAt ?: Instant.ofEpochMilli(d.takenAt ?: d.scheduledAt ?: time.nowMillis())).toEpochMilli() else null,

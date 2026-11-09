@@ -100,6 +100,7 @@ class EditorViewModel @Inject constructor(
             repo.get(id)?.let { m ->
                 _s.update {
                     it.copy(editingId = id, original = m, form = it.form.copy(name = m.name, type = m.type, instructions = m.instructions,
+                        purpose = m.purpose, purposeNote = m.purposeNote,
                         foodRelation = m.foodRelation, side = m.side, bodyLocation = m.bodyLocation.orEmpty(),
                         dressingType = m.dressingType.orEmpty(), sites = m.enabledSites.orEmpty(), timeZoneMode = m.timeZoneMode))
                 }
@@ -142,7 +143,7 @@ class EditorViewModel @Inject constructor(
         val s = _s.value
         val result = if (s.editingId != null && s.original != null) {
             val f = s.form
-            service.updateDetails(s.original.copy(name = f.name, instructions = f.instructions, foodRelation = f.foodRelation, side = f.side,
+            service.updateDetails(s.original.copy(name = f.name, instructions = f.instructions, purpose = f.purpose ?: s.original.purpose, purposeNote = f.purposeNote, foodRelation = f.foodRelation, side = f.side,
                 bodyLocation = f.bodyLocation.ifBlank { null }, dressingType = f.dressingType.ifBlank { null }, enabledSites = f.sites.ifEmpty { null }))
         } else service.create(built())
         when (result) {
@@ -196,6 +197,10 @@ fun EditorScreen(vm: EditorViewModel, onDone: () -> Unit) {
 private fun DetailsStep(s: EditorState, vm: EditorViewModel, showTimeZone: Boolean) {
     val f = s.form
     OutlinedTextField(f.name, { if (it.length <= FormValidator.MAX_NAME) vm.form { x -> x.copy(name = it) } }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    SectionTitle("Why is it needed?")
+    ChoiceChips(com.remedicord.domain.model.MedicationPurpose.entries, f.purpose, Labels::purpose) { vm.form { x -> x.copy(purpose = it) } }
+    OutlinedTextField(f.purposeNote, { if (it.length <= 200) vm.form { x -> x.copy(purposeNote = it) } },
+        label = { Text("Reason (e.g. Vitamin D supplement, throat infection, 6-monthly deworming)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     OutlinedTextField(f.instructions, { if (it.length <= FormValidator.MAX_TEXT) vm.form { x -> x.copy(instructions = it) } }, label = { Text("Instructions (optional)") }, modifier = Modifier.fillMaxWidth())
     SectionTitle("Food")
     ChoiceChips(FoodRelation.entries, f.foodRelation, Labels::food) { vm.form { x -> x.copy(foodRelation = it) } }
@@ -292,6 +297,7 @@ private fun ReviewStep(f: MedicationForm) {
     SectionTitle("Check and save")
     val lines = buildList {
         add("Name" to f.name.trim())
+        f.purpose?.let { add("Why" to "${Labels.purpose(it)}: ${f.purposeNote.trim()}") }
         add("Type" to Labels.type(f.type))
         f.side?.let { add("Side" to Labels.side(it)) }
         if (f.sites.isNotEmpty()) add("Sites" to f.sites.joinToString(", "))

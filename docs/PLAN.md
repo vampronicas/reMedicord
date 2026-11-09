@@ -32,6 +32,14 @@ Offline only. History is encrypted on the device. The only thing that leaves the
 | R21 | Doses due while the phone was off (or since a restored backup) are **not assumed**. The app asks whether each was taken, missed or skipped |
 | R22 | Time-zone behaviour is set **per medicine**: follow local time (default) or keep home-time intervals |
 | R23 | No in-app reset/erase. Code is published to a **public GitHub repo** at the end, with no secrets in it |
+| R24 | *(v1.1, 2026-11-09)* Past records can be **amended for 5 days** (today + 4 previous days); older records are read-only |
+| R25 | A dose with **no answer for 5 days** is closed as **Missed – "No answer within 5 days"** (counts in adherence) |
+| R26 | Reminder action **"Got it, I'll take it later"**: reminders stop, the dose shows orange ("needs your answer") and the app **asks on the next open** whether it was taken |
+| R27 | **"Don't remind me again today"** per medicine (e.g. supplements while travelling): no more reminders until midnight; the day's doses are filled in later. Nothing is marked skipped, so it's allowed for must-complete courses too. **"Skip this dose"** remains (reason required) |
+| R28 | Notification buttons: **Taken · Later · Skip…** ("Skip…" opens the reminder screen, which offers every choice, including Snooze 5/10/15) |
+| R29 | **Flexible schedule:** N doses a day at any of chosen times (Morning / Afternoon / Evening / Night, times configurable, optional minimum gap). Reminds at each time until N are taken; extra times become "not needed"; at day end only the shortfall counts as missed |
+| R30 | **Why the medicine is needed** is required: category (Supplement / vitamin, Treatment, Periodic e.g. deworming, Long-term, Preventive, Other) + short reason. DB schema v2, with a tested migration |
+| R31 | Calendar day tap shows a **per-medicine summary**. History has **multi-select** medicine and status filters. Today has a **date picker** and **soft status colours** (taken green, skipped grey, missed red, needs answer orange, due blue, not needed faint) |
 
 ---
 

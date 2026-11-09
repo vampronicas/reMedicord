@@ -30,7 +30,21 @@ enum class DoseUnit { TABLET, CAPSULE, ML, DROP, UNIT, MG, PUFF, SPRAY, APPLICAT
 
 /** Dose state machine (PLAN.md §4.6). */
 @Serializable
-enum class DoseStatus { PLANNED, DUE, SNOOZED, TAKEN, SKIPPED, MISSED, UNCONFIRMED }
+enum class DoseStatus {
+    PLANNED, DUE, SNOOZED, TAKEN, SKIPPED, MISSED,
+    /** Needs the user's answer (phone off, "Later", reminders paused for the day). Auto-closed as MISSED after 5 days. */
+    UNCONFIRMED,
+    /** Flexible schedule: this optional time wasn't needed because the day's doses were already taken. */
+    NOT_NEEDED,
+}
+
+/** Why a dose is waiting for an answer (shown in the review prompt). */
+@Serializable
+enum class PendingReason { APP_NOT_RUNNING, LATER, PAUSED_TODAY, RESTORED }
+
+/** Why the medicine is taken (required when adding). */
+@Serializable
+enum class MedicationPurpose { SUPPLEMENT, TREATMENT, PERIODIC, LONG_TERM, PREVENTIVE, OTHER }
 
 /** Skip rule mode (PLAN.md §4.5). "This dose only" is a direct SKIPPED status, not a rule. */
 @Serializable

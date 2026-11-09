@@ -224,6 +224,7 @@ object BackupCodec {
             text(md.bodyLocation, FormValidator.MAX_SHORT, "body location")
             text(md.dressingType, FormValidator.MAX_SHORT, "dressing type")
             text(md.stopNote, FormValidator.MAX_TEXT, "stop note", newlines = true)
+            text(md.purposeNote, 200, "purpose")
             md.enabledSites?.let { sites -> if (sites.size > FormValidator.MAX_SITES) fail("sites"); sites.forEach { text(it, FormValidator.MAX_SHORT, "site") } }
             md.homeZone?.let { z -> if (runCatching { ZoneId.of(z) }.isFailure) fail("time zone") }
             md.courseLength?.let { if (it !in 1..1000) fail("course length") }

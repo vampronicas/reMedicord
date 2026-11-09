@@ -49,7 +49,7 @@ class HistoryEditTest {
     @After fun tearDown() { db.close(); context.deleteDatabase("hist-test.db"); keys.deleteAllKeyMaterial() }
 
     private suspend fun missedDose(): Long {
-        service.create(MedicationForm(name = "Hist", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0)))))
+        service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Hist", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0)))))
         val medId = db.medicationDao().getAll().single().id
         val at = Instant.now().minus(Duration.ofHours(3)).toEpochMilli()
         return db.doseEventDao().insert(DoseEventEntity(medicationId = medId, scheduledAt = at, status = DoseStatus.MISSED, createdAt = at, updatedAt = at))
@@ -76,7 +76,7 @@ class HistoryEditTest {
     }
 
     @Test fun asNeededRecordsAndWarnsOnLimits() = runTest {
-        service.create(MedicationForm(name = "Pain", type = MedicationType.PILL, rule = ScheduleRule.AsNeeded(240, 2)))
+        service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Pain", type = MedicationType.PILL, rule = ScheduleRule.AsNeeded(240, 2)))
         val medId = db.medicationDao().getAll().single().id
         assertEquals(com.remedicord.domain.policy.PrnPolicy.Result.Ok, actions.prnCheck(medId))
         actions.takePrn(medId)

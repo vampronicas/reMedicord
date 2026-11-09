@@ -23,6 +23,30 @@ object HistoryCalc {
         }
     }
 
+    /** History filter chips (multi-select). Empty selection = everything. */
+    enum class StatusFilter(val statuses: Set<DoseStatus>) {
+        TAKEN(setOf(DoseStatus.TAKEN)),
+        MISSED(setOf(DoseStatus.MISSED)),
+        NEEDS_ANSWER(setOf(DoseStatus.UNCONFIRMED)),
+        SKIPPED(setOf(DoseStatus.SKIPPED)),
+        UPCOMING(setOf(DoseStatus.PLANNED, DoseStatus.DUE, DoseStatus.SNOOZED)),
+    }
+
+    fun matches(status: DoseStatus, filters: Set<StatusFilter>): Boolean =
+        filters.isEmpty() || filters.any { status in it.statuses }
+
+    data class MedSummary(val medicationId: Long, val taken: Int, val missed: Int, val needsAnswer: Int, val skipped: Int, val upcoming: Int) {
+        val total get() = taken + missed + needsAnswer + skipped + upcoming
+        val complete get() = total > 0 && taken + skipped == total
+    }
+
+    /** Day summary per medicine (calendar day tap). NOT_NEEDED flexible times are left out. */
+    fun summarize(entries: List<Pair<Long, DoseStatus>>): List<MedSummary> =
+        entries.filter { it.second != DoseStatus.NOT_NEEDED }.groupBy({ it.first }, { it.second }).map { (id, s) ->
+            MedSummary(id, s.count { it == DoseStatus.TAKEN }, s.count { it == DoseStatus.MISSED }, s.count { it == DoseStatus.UNCONFIRMED },
+                s.count { it == DoseStatus.SKIPPED }, s.count { it == DoseStatus.PLANNED || it == DoseStatus.DUE || it == DoseStatus.SNOOZED })
+        }.sortedBy { it.medicationId }
+
     /** Calendar cells for a month, Monday first; nulls pad the first week. */
     fun monthGrid(month: YearMonth): List<LocalDate?> {
         val pad = month.atDay(1).dayOfWeek.value - 1

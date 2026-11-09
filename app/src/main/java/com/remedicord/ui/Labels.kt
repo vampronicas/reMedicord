@@ -55,10 +55,26 @@ object Labels {
 
     fun dose(amount: BigDecimal, u: DoseUnit) = "${amount.stripTrailingZeros().toPlainString()} ${unit(u, amount)}"
 
+    fun purpose(p: com.remedicord.domain.model.MedicationPurpose) = when (p) {
+        com.remedicord.domain.model.MedicationPurpose.SUPPLEMENT -> "Supplement / vitamin"
+        com.remedicord.domain.model.MedicationPurpose.TREATMENT -> "Treatment (illness, as prescribed)"
+        com.remedicord.domain.model.MedicationPurpose.PERIODIC -> "Periodic (e.g. deworming)"
+        com.remedicord.domain.model.MedicationPurpose.LONG_TERM -> "Long-term condition"
+        com.remedicord.domain.model.MedicationPurpose.PREVENTIVE -> "Preventive"
+        com.remedicord.domain.model.MedicationPurpose.OTHER -> "Other"
+    }
+
     fun side(s: BodySide) = when (s) { BodySide.LEFT -> "Left"; BodySide.RIGHT -> "Right"; BodySide.BOTH -> "Both" }
     fun food(f: FoodRelation) = when (f) {
         FoodRelation.NONE -> "No food rule"; FoodRelation.BEFORE_FOOD -> "Before food"
         FoodRelation.WITH_FOOD -> "With food"; FoodRelation.AFTER_FOOD -> "After food"
+    }
+
+    fun pending(p: com.remedicord.domain.model.PendingReason?) = when (p) {
+        com.remedicord.domain.model.PendingReason.LATER -> "You said you'd take it later"
+        com.remedicord.domain.model.PendingReason.PAUSED_TODAY -> "Reminders were paused for the day"
+        com.remedicord.domain.model.PendingReason.RESTORED -> "Restored from a backup"
+        com.remedicord.domain.model.PendingReason.APP_NOT_RUNNING, null -> "Due while reMedicord wasn't running"
     }
 
     fun stopReason(r: StopReason) = when (r) {
@@ -68,7 +84,8 @@ object Labels {
 
     fun status(s: DoseStatus) = when (s) {
         DoseStatus.PLANNED -> "Upcoming"; DoseStatus.DUE -> "Due now"; DoseStatus.SNOOZED -> "Snoozed"; DoseStatus.TAKEN -> "Taken"
-        DoseStatus.SKIPPED -> "Skipped"; DoseStatus.MISSED -> "Missed"; DoseStatus.UNCONFIRMED -> "Needs review"
+        DoseStatus.SKIPPED -> "Skipped"; DoseStatus.MISSED -> "Missed"; DoseStatus.UNCONFIRMED -> "Needs your answer"
+        DoseStatus.NOT_NEEDED -> "Not needed"
     }
 
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
@@ -86,6 +103,8 @@ object Labels {
             (r.quietStart?.let { " (quiet ${timeFmt.format(it)}–${timeFmt.format(r.quietEnd)})" } ?: "")
         is ScheduleRule.EveryNDays -> (if (r.n == 7) "Weekly" else "Every ${r.n} days") + " at " + r.times.sorted().joinToString(", ") { timeFmt.format(it) } + " from ${r.startDate}"
         is ScheduleRule.Cyclic -> "${r.daysOn} days on / ${r.daysOff} off at " + r.times.sorted().joinToString(", ") { timeFmt.format(it) }
+        is ScheduleRule.FlexibleDaily -> "${r.dosesPerDay}× a day, any of " + r.periods.joinToString(", ") { "${it.name} ${timeFmt.format(it.time)}" } +
+            (if (r.minGapMinutes > 0) " (≥ ${r.minGapMinutes / 60} h apart)" else "")
         is ScheduleRule.AsNeeded -> "As needed (≥ ${r.minGapMinutes / 60.0} h apart, max ${r.maxPerDay}/day)".replace(".0 h", " h")
     }
 }

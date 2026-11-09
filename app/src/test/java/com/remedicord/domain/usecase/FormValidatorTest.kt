@@ -13,7 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FormValidatorTest {
-    private val ok = MedicationForm(name = "Amoxicillin", rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0))))
+    private val ok = MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Amoxicillin", rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0))))
 
     @Test fun validFormPasses() = assertEquals(emptyList<String>(), FormValidator.validate(ok))
 

@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,11 +19,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,12 +51,15 @@ import com.remedicord.data.repo.DoseRepository
 import com.remedicord.data.repo.MedicationRepository
 import com.remedicord.domain.model.DoseStatus
 import com.remedicord.domain.model.MedicationStatus
+import com.remedicord.domain.policy.AmendPolicy
 import com.remedicord.domain.policy.HistoryCalc
+import com.remedicord.domain.policy.HistoryCalc.StatusFilter
 import com.remedicord.domain.schedule.DoseGenerator
 import com.remedicord.domain.usecase.DoseActionService
 import com.remedicord.ui.Labels
 import com.remedicord.ui.components.ChoiceChips
 import com.remedicord.ui.components.TimePickerDialog
+import com.remedicord.ui.theme.StatusColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -72,7 +80,9 @@ import kotlinx.coroutines.launch
 data class HistoryState(
     val month: YearMonth,
     val meds: List<MedicationEntity> = emptyList(),
-    val filter: Long? = null,
+    val medFilter: Set<Long> = emptySet(),
+    val statusFilter: Set<StatusFilter> = emptySet(),
+    /** Doses after both filters. */
     val doses: List<DoseEventEntity> = emptyList(),
     val adherence: Triple<Int?, Int?, Int?> = Triple(null, null, null),
 )
@@ -87,51 +97,54 @@ class HistoryViewModel @Inject constructor(
     private val time: TimeProvider,
 ) : ViewModel() {
     val zone get() = time.zone()
+    val today: LocalDate get() = LocalDate.now(zone)
     private val month = MutableStateFlow(YearMonth.now(time.zone()))
-    private val filter = MutableStateFlow<Long?>(null)
+    private val medFilter = MutableStateFlow<Set<Long>>(emptySet())
+    private val statusFilter = MutableStateFlow<Set<StatusFilter>>(emptySet())
     val selected = MutableStateFlow<LocalDate?>(LocalDate.now(time.zone()))
 
-    val state: StateFlow<HistoryState> = combine(month, filter) { m, f -> m to f }.flatMapLatest { (m, f) ->
-        val today = LocalDate.now(zone)
-        // Load from 90 days back (adherence) or month start, whichever is earlier.
+    val state: StateFlow<HistoryState> = combine(month, medFilter, statusFilter) { m, mf, sf -> Triple(m, mf, sf) }.flatMapLatest { (m, mf, sf) ->
         val from = minOf(m.atDay(1), today.minusDays(89))
         val fromMs = DoseGenerator.resolve(from.atStartOfDay(), zone).toEpochMilli()
         val toMs = DoseGenerator.resolve(maxOf(m.atEndOfMonth(), today).plusDays(1).atStartOfDay(), zone).toEpochMilli()
         combine(doses.observeBetween(fromMs, toMs), meds.observeByStatus(*MedicationStatus.entries.toTypedArray())) { list, ms ->
-            val shown = list.filter { f == null || it.medicationId == f }
-            val entries = shown.mapNotNull { d -> HistoryCalc.dayOf(d.scheduledAt, d.takenAt, zone)?.let { it to d.status } }
-            HistoryState(m, ms, f, shown, Triple(HistoryCalc.adherence(entries, today, 7), HistoryCalc.adherence(entries, today, 30), HistoryCalc.adherence(entries, today, 90)))
+            val byMed = list.filter { mf.isEmpty() || it.medicationId in mf }
+            // Adherence follows the medicine filter only (a status filter would distort it).
+            val entries = byMed.mapNotNull { d -> HistoryCalc.dayOf(d.scheduledAt, d.takenAt, zone)?.let { it to d.status } }
+            HistoryState(m, ms, mf, sf, byMed.filter { HistoryCalc.matches(it.status, sf) },
+                Triple(HistoryCalc.adherence(entries, today, 7), HistoryCalc.adherence(entries, today, 30), HistoryCalc.adherence(entries, today, 90)))
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HistoryState(YearMonth.now(time.zone())))
 
     fun shiftMonth(by: Long) { month.value = month.value.plusMonths(by) }
-    fun setFilter(id: Long?) { filter.value = id }
+    fun toggleMed(id: Long) { medFilter.value = medFilter.value.let { if (id in it) it - id else it + id } }
+    fun toggleStatus(f: StatusFilter) { statusFilter.value = statusFilter.value.let { if (f in it) it - f else it + f } }
+    fun clearFilters() { medFilter.value = emptySet(); statusFilter.value = emptySet() }
     fun select(d: LocalDate) { selected.value = d }
+    fun canAmend(d: LocalDate) = AmendPolicy.canAmend(d, today)
 
     suspend fun auditFor(doseId: Long): List<AuditLogEntity> = auditDao.forEntity(AuditLogger.DOSE, doseId)
 
     fun edit(d: DoseEventEntity, status: DoseStatus, takenTime: LocalTime?, note: String) = viewModelScope.launch {
-        val day = HistoryCalc.dayOf(d.scheduledAt, d.takenAt, zone) ?: LocalDate.now(zone)
-        val at = takenTime?.let { DoseGenerator.resolve(day.atTime(it), zone) }
-        actions.edit(d.id, status, at, note)
+        val day = HistoryCalc.dayOf(d.scheduledAt, d.takenAt, zone) ?: today
+        actions.edit(d.id, status, takenTime?.let { DoseGenerator.resolve(day.atTime(it), zone) }, note)
     }
+
+    fun answer(d: DoseEventEntity, a: DoseActionService.ReviewAnswer) = viewModelScope.launch { actions.review(d.id, a); actions.finishReview() }
 }
 
-private fun markerColor(m: HistoryCalc.Marker): Color? = when (m) {
-    HistoryCalc.Marker.NONE -> null
-    HistoryCalc.Marker.ALL_TAKEN -> Color(0xFF2E7D32)
-    HistoryCalc.Marker.HAS_MISSED -> Color(0xFFC62828)
-    HistoryCalc.Marker.NEEDS_REVIEW -> Color(0xFFEF6C00)
-    HistoryCalc.Marker.SKIPPED_ONLY -> Color(0xFF757575)
-    HistoryCalc.Marker.PARTIAL -> Color(0xFFF9A825)
+private fun filterLabel(f: StatusFilter) = when (f) {
+    StatusFilter.TAKEN -> "Taken (green)"; StatusFilter.MISSED -> "Missed (red)"; StatusFilter.NEEDS_ANSWER -> "Needs answer (orange)"
+    StatusFilter.SKIPPED -> "Skipped (grey)"; StatusFilter.UPCOMING -> "Upcoming"
 }
 
 private fun markerLabel(m: HistoryCalc.Marker) = when (m) {
     HistoryCalc.Marker.NONE -> "no doses"; HistoryCalc.Marker.ALL_TAKEN -> "all taken"; HistoryCalc.Marker.HAS_MISSED -> "missed dose"
-    HistoryCalc.Marker.NEEDS_REVIEW -> "needs review"; HistoryCalc.Marker.SKIPPED_ONLY -> "skipped"; HistoryCalc.Marker.PARTIAL -> "partly taken"
+    HistoryCalc.Marker.NEEDS_REVIEW -> "needs your answer"; HistoryCalc.Marker.SKIPPED_ONLY -> "skipped"; HistoryCalc.Marker.PARTIAL -> "partly taken"
 }
 
 /** S9 History. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HistoryScreen(vm: HistoryViewModel) {
     val s by vm.state.collectAsState()
@@ -142,7 +155,16 @@ fun HistoryScreen(vm: HistoryViewModel) {
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Adherence  7 d: ${s.adherence.first?.let { "$it%" } ?: "–"}   30 d: ${s.adherence.second?.let { "$it%" } ?: "–"}   90 d: ${s.adherence.third?.let { "$it%" } ?: "–"}",
             style = MaterialTheme.typography.titleSmall)
-        ChoiceChips(listOf<Long?>(null) + s.meds.map { it.id }, s.filter, { id -> id?.let { names[it] } ?: "All medicines" }, vm::setFilter)
+        Text("Medicines (select one or more)", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            s.meds.forEach { m -> FilterChip(selected = m.id in s.medFilter, onClick = { vm.toggleMed(m.id) }, label = { Text(m.name) }) }
+        }
+        Text("Show (select one or more)", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            StatusFilter.entries.forEach { f -> FilterChip(selected = f in s.statusFilter, onClick = { vm.toggleStatus(f) }, label = { Text(filterLabel(f)) }) }
+        }
+        if (s.medFilter.isNotEmpty() || s.statusFilter.isNotEmpty()) TextButton(onClick = vm::clearFilters) { Text("Clear filters (show everything)") }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { vm.shiftMonth(-1) }) { Text("‹ Prev") }
             Text("${s.month.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${s.month.year}", style = MaterialTheme.typography.titleMedium)
@@ -164,32 +186,66 @@ fun HistoryScreen(vm: HistoryViewModel) {
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                             ) {
                                 Text(day.dayOfMonth.toString())
-                                markerColor(marker)?.let { Box(Modifier.size(6.dp).background(it, CircleShape)) }
+                                StatusColors.marker(marker)?.let { Box(Modifier.size(7.dp).background(it, CircleShape)) }
                             }
                         }
                     }
                 }
             }
         }
-        Text("Green: all taken · Red: missed · Orange: needs review · Yellow: partly · Grey: skipped", style = MaterialTheme.typography.bodySmall)
+        Text("Dots: green all taken · red missed · orange needs your answer · yellow partly · grey skipped", style = MaterialTheme.typography.bodySmall)
+
         selected?.let { day ->
+            val list = byDay[day].orEmpty().filter { it.status != DoseStatus.NOT_NEEDED }.sortedBy { it.scheduledAt ?: it.takenAt }
             Text(Labels.date(DoseGenerator.resolve(day.atStartOfDay(), vm.zone)), style = MaterialTheme.typography.titleMedium)
-            val list = byDay[day].orEmpty().sortedBy { it.scheduledAt ?: it.takenAt }
-            if (list.isEmpty()) Text("No doses.")
+            DaySummary(HistoryCalc.summarize(list.map { it.medicationId to it.status }), names)
+            if (!vm.canAmend(day) && day.isBefore(vm.today)) Text("Read-only: records older than 5 days can't be changed.", style = MaterialTheme.typography.bodySmall)
             list.forEach { d ->
-                Card(Modifier.fillMaxWidth().clickable(enabled = d.status in EDITABLE) { editing = d }) {
-                    Column(Modifier.padding(12.dp)) {
+                val canEdit = vm.canAmend(day) && d.status in EDITABLE
+                Card(
+                    Modifier.fillMaxWidth().clickable(enabled = canEdit) { editing = d },
+                    colors = CardDefaults.cardColors(containerColor = StatusColors.container(d.status)),
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("${Labels.time(Instant.ofEpochMilli(d.scheduledAt ?: d.takenAt ?: 0))}  ${names[d.medicationId] ?: "?"}", style = MaterialTheme.typography.titleSmall)
                         Text(listOfNotNull(Labels.status(d.status),
                             d.takenAt?.takeIf { d.status == DoseStatus.TAKEN }?.let { "at ${Labels.time(Instant.ofEpochMilli(it))}" },
+                            Labels.pending(d.pendingReason).takeIf { d.status == DoseStatus.UNCONFIRMED },
                             "late log".takeIf { d.isLateLog }, "as needed".takeIf { d.isPrn }, d.site, d.skipReason, d.note).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall)
+                        if (canEdit) Text("Tap to change", style = MaterialTheme.typography.labelSmall)
+                        if (d.status == DoseStatus.UNCONFIRMED && vm.canAmend(day)) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { vm.answer(d, DoseActionService.ReviewAnswer.TAKEN) }) { Text("Taken") }
+                            TextButton(onClick = { vm.answer(d, DoseActionService.ReviewAnswer.MISSED) }) { Text("Missed") }
+                            TextButton(onClick = { vm.answer(d, DoseActionService.ReviewAnswer.SKIPPED) }) { Text("Skipped") }
+                        }
                     }
                 }
             }
         }
     }
     editing?.let { d -> EditDoseDialog(vm, d, names[d.medicationId] ?: "") { editing = null } }
+}
+
+/** Per-medicine summary of the selected day. */
+@Composable
+private fun DaySummary(summary: List<HistoryCalc.MedSummary>, names: Map<Long, String>) {
+    if (summary.isEmpty()) { Text("No doses."); return }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Summary", style = MaterialTheme.typography.titleSmall)
+            summary.forEach { m ->
+                val parts = listOfNotNull(
+                    "${m.taken}/${m.total} taken",
+                    m.missed.takeIf { it > 0 }?.let { "$it missed" },
+                    m.needsAnswer.takeIf { it > 0 }?.let { "$it needs answer" },
+                    m.skipped.takeIf { it > 0 }?.let { "$it skipped" },
+                    m.upcoming.takeIf { it > 0 }?.let { "$it upcoming" },
+                )
+                Text((if (m.complete) "✓ " else if (m.missed > 0) "✗ " else "• ") + "${names[m.medicationId] ?: "?"}: " + parts.joinToString(", "))
+            }
+        }
+    }
 }
 
 private val EDITABLE = setOf(DoseStatus.TAKEN, DoseStatus.MISSED, DoseStatus.SKIPPED)
@@ -201,10 +257,10 @@ private fun EditDoseDialog(vm: HistoryViewModel, d: DoseEventEntity, name: Strin
     var note by remember { mutableStateOf(d.note.orEmpty()) }
     var pick by remember { mutableStateOf(false) }
     var audit by remember { mutableStateOf<List<AuditLogEntity>>(emptyList()) }
-    androidx.compose.runtime.LaunchedEffect(d.id) { audit = vm.auditFor(d.id) }
+    LaunchedEffect(d.id) { audit = vm.auditFor(d.id) }
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Edit · $name") },
+        title = { Text("Change · $name") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChoiceChips(EDITABLE.toList(), status, Labels::status) { status = it }
