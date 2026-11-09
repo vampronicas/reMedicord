@@ -16,6 +16,27 @@ class MigrationTest {
     @get:Rule
     val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), AppDatabase::class.java)
 
+    @Test fun version2To3AddsPauseColumnsAndKeepsData() {
+        helper.createDatabase("m23.db", 2).use { db ->
+            db.execSQL(
+                """INSERT INTO medication (id, name, type, instructions, foodRelation, status, mustComplete, courseMode, timeZoneMode, createdAt, updatedAt, purpose, purposeNote)
+                   VALUES (1, 'Vitamin D', 'PILL', '', 'NONE', 'PAUSED', 0, 'NONE', 'LOCAL', 1, 1, 'SUPPLEMENT', 'Winter')""",
+            )
+        }
+        helper.runMigrationsAndValidate("m23.db", 3, true, *AppDatabase.MIGRATIONS).use { db ->
+            db.query("SELECT name, status, purposeNote, pausedUntil, pauseReason FROM medication WHERE id = 1").use { c ->
+                c.moveToFirst()
+                assertEquals("Vitamin D", c.getString(0)); assertEquals("PAUSED", c.getString(1)); assertEquals("Winter", c.getString(2))
+                assertEquals(true, c.isNull(3)); assertEquals(true, c.isNull(4)) // existing pauses become "until I resume"
+            }
+        }
+    }
+
+    @Test fun version1To3InOneGo() {
+        helper.createDatabase("m13.db", 1).close()
+        helper.runMigrationsAndValidate("m13.db", 3, true, *AppDatabase.MIGRATIONS).close()
+    }
+
     @Test fun version1To2KeepsDataAndAddsColumns() {
         helper.createDatabase(testDb, 1).use { db ->
             db.execSQL(

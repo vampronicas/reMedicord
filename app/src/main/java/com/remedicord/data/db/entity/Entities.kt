@@ -63,6 +63,9 @@ data class MedicationEntity(
     @ColumnInfo(defaultValue = "") val purposeNote: String = "",
     /** "Don't remind me again today": no reminder alarms before this instant (schema v2). */
     val remindersMutedUntil: Long? = null,
+    /** Paused until this instant (schema v3). Null while PAUSED = "until I resume". */
+    val pausedUntil: Long? = null,
+    val pauseReason: String? = null,
 )
 
 @Serializable

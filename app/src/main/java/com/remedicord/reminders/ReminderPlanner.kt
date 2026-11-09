@@ -79,7 +79,14 @@ class ReminderPlanner(
             }
         }
 
-        for (med in allMeds) {
+        for (stored in allMeds) {
+            // E7: a pause with an end date resumes by itself.
+            val med = if (stored.status == MedicationStatus.PAUSED && stored.pausedUntil != null && nowMs >= stored.pausedUntil) {
+                stored.copy(status = MedicationStatus.ACTIVE, pausedUntil = null, pauseReason = null).also {
+                    meds.update(it, "Pause ended: resumed automatically")
+                    Notifications.postGeneral(context, RESUMED_NOTIFICATION_BASE + stored.id.toInt(), "Reminders resumed", "${stored.name}: the pause has ended.")
+                }
+            } else stored
             if (med.status != MedicationStatus.ACTIVE) { dao.deleteFutureAuto(med.id, nowMs); continue }
             val zone = med.zoneSettings().effectiveZone(time.zone())
             val regimens = db.regimenDao().forMedication(med.id).map { it.toDomain() }
@@ -170,7 +177,7 @@ class ReminderPlanner(
                 FlexiblePolicy.reconcileDay(rule.dosesPerDay, slots, now, dayOver = key.second.isBefore(today)).forEach { (id, status) ->
                     val row = rows.first { it.id == id }
                     if (row.status != status) {
-                        dao.update(row.copy(status = status, remindAt = null, updatedAt = nowMs))
+                        dao.update(row.copy(status = status, remindAt = if (status == DoseStatus.PLANNED) row.scheduledAt else null, updatedAt = nowMs))
                         row.slotId?.let { s -> if (dao.openInSlot(s).none { it.status == DoseStatus.DUE }) Notifications.cancel(context, s.toInt()) }
                     }
                 }
@@ -197,6 +204,7 @@ class ReminderPlanner(
 
     companion object {
         val HORIZON: Duration = Duration.ofHours(48)
+        private const val RESUMED_NOTIFICATION_BASE = 100_000
     }
 }
 

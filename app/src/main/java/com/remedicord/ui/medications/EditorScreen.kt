@@ -143,7 +143,7 @@ class EditorViewModel @Inject constructor(
         val s = _s.value
         val result = if (s.editingId != null && s.original != null) {
             val f = s.form
-            service.updateDetails(s.original.copy(name = f.name, instructions = f.instructions, purpose = f.purpose ?: s.original.purpose, purposeNote = f.purposeNote, foodRelation = f.foodRelation, side = f.side,
+            service.updateDetails(s.original.copy(name = f.name, instructions = f.instructions, purpose = f.purpose ?: s.original.purpose, purposeNote = f.purposeNote, colorTag = f.colorIndex ?: s.original.colorTag, foodRelation = f.foodRelation, side = f.side,
                 bodyLocation = f.bodyLocation.ifBlank { null }, dressingType = f.dressingType.ifBlank { null }, enabledSites = f.sites.ifEmpty { null }))
         } else service.create(built())
         when (result) {
@@ -197,6 +197,8 @@ fun EditorScreen(vm: EditorViewModel, onDone: () -> Unit) {
 private fun DetailsStep(s: EditorState, vm: EditorViewModel, showTimeZone: Boolean) {
     val f = s.form
     OutlinedTextField(f.name, { if (it.length <= FormValidator.MAX_NAME) vm.form { x -> x.copy(name = it) } }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    SectionTitle("Colour")
+    com.remedicord.ui.components.ColorPicker(f.colorIndex ?: s.original?.colorTag) { c -> vm.form { x -> x.copy(colorIndex = c) } }
     SectionTitle("Why is it needed?")
     ChoiceChips(com.remedicord.domain.model.MedicationPurpose.entries, f.purpose, Labels::purpose) { vm.form { x -> x.copy(purpose = it) } }
     OutlinedTextField(f.purposeNote, { if (it.length <= 200) vm.form { x -> x.copy(purposeNote = it) } },

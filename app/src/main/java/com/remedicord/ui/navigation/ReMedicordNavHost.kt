@@ -119,7 +119,7 @@ private fun MainApp() {
         Box(Modifier.fillMaxSize().padding(pad)) {
             NavHost(nav, startDestination = TodayRoute) {
                 composable<TodayRoute> {
-                    TodayScreen(hiltViewModel(), onOpenMedication = { nav.navigate(DetailRoute(it)) }, onReview = { nav.navigate(ReviewRoute) })
+                    TodayScreen(hiltViewModel(), onReview = { nav.navigate(ReviewRoute) })
                 }
                 composable<ReviewRoute> { ReviewScreen(hiltViewModel(), onDone = { nav.popBackStack() }) }
                 composable<MedicationsRoute> {

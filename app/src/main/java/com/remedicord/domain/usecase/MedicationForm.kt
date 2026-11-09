@@ -18,6 +18,8 @@ data class MedicationForm(
     /** Why the medicine is taken: required category + short reason (e.g. "Vitamin D supplement", "Throat infection"). */
     val purpose: com.remedicord.domain.model.MedicationPurpose? = null,
     val purposeNote: String = "",
+    /** E8: one of 8 soft colours (index), shown on icons and cards. */
+    val colorIndex: Int? = null,
     val instructions: String = "",
     val foodRelation: FoodRelation = FoodRelation.NONE,
     val side: BodySide? = null,
@@ -58,6 +60,7 @@ object FormValidator {
         if (!cleanText(name)) add("Name contains invalid characters")
         if (f.purpose == null) add("Choose why this medicine is taken")
         if (f.purposeNote.isBlank()) add("Describe why it's needed (e.g. \"Vitamin D supplement\", \"Throat infection\")")
+        if (f.colorIndex != null && f.colorIndex !in 0..7) add("Invalid colour")
         if (f.purposeNote.length > 200 || !cleanText(f.purposeNote)) add("Reason is too long or contains invalid characters")
         if (f.instructions.length > MAX_TEXT || !cleanText(f.instructions, allowNewlines = true)) add("Instructions are too long or contain invalid characters")
         listOf(f.bodyLocation, f.dressingType).forEach { if (it.length > MAX_SHORT || !cleanText(it)) add("A detail field is too long or contains invalid characters") }

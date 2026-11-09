@@ -30,6 +30,7 @@ class MedicationRepository(
 
     fun observe(id: Long): Flow<MedicationEntity?> = medications.observe(id)
     suspend fun get(id: Long): MedicationEntity? = medications.get(id)
+    suspend fun count(): Int = medications.getAll().size
     suspend fun regimens(medicationId: Long): List<RegimenEntity> = regimens.forMedication(medicationId)
     fun observeRegimens(medicationId: Long): Flow<List<RegimenEntity>> = regimens.observeForMedication(medicationId)
     suspend fun activeRegimen(medicationId: Long, at: Long): RegimenEntity? = regimens.activeAt(medicationId, at)
@@ -51,6 +52,16 @@ class MedicationRepository(
         val after = medication.copy(createdAt = before.createdAt, updatedAt = time.nowMillis())
         medications.update(after)
         audit.record(AuditLogger.MEDICATION, after.id, AuditAction.UPDATE, MedicationEntity.serializer(), before, after, note)
+    }
+
+    /**
+     * E4: removes a medicine and (by cascade) its regimens, doses and skip rules, in one transaction.
+     * The audit trail keeps only "Medicine deleted" with the name and date (no medical details).
+     */
+    suspend fun delete(id: Long) = db.withTransaction {
+        val med = medications.get(id) ?: return@withTransaction
+        medications.deleteById(id)
+        audit.record(AuditLogger.MEDICATION, id, AuditAction.DELETE, MedicationEntity.serializer(), null, null, "Medicine deleted: ${med.name}")
     }
 
     /** Ends a regimen at [at] (stop). Audited. */

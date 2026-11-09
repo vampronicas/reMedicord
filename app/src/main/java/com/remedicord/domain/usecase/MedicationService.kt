@@ -59,6 +59,7 @@ class MedicationService(
         val med = MedicationEntity(
             name = form.name.trim(), type = form.type, instructions = form.instructions.trim(),
             purpose = form.purpose!!, purposeNote = form.purposeNote.trim(),
+            colorTag = form.colorIndex ?: (meds.count() % 8),
             foodRelation = form.foodRelation, side = form.side,
             bodyLocation = form.bodyLocation.trim().ifEmpty { null }, dressingType = form.dressingType.trim().ifEmpty { null },
             enabledSites = form.sites.map(String::trim).ifEmpty { null },
@@ -127,10 +128,19 @@ class MedicationService(
 
     suspend fun cancelSkip(ruleId: Long) { skips.cancel(ruleId, "Cancelled by user"); replanner.replan() }
 
-    suspend fun pause(medicationId: Long): ActionResult {
+    /**
+     * E7: pause until the end of [untilDate] (reminders resume automatically the next morning at 00:00), or
+     * "until I resume" when [untilDate] is null. Past dates are refused.
+     */
+    suspend fun pause(medicationId: Long, untilDate: LocalDate? = null, reason: String? = null): ActionResult {
         val med = meds.get(medicationId) ?: return ActionResult.Invalid(listOf("Medication not found"))
         (StopPolicy.canPause(med.courseInfo()) as? PolicyResult.Blocked)?.let { return ActionResult.Blocked(it.message) }
-        meds.update(med.copy(status = MedicationStatus.PAUSED), "Paused")
+        val today = LocalDate.now(time.zone())
+        if (untilDate != null && untilDate.isBefore(today)) return ActionResult.Invalid(listOf("Choose today or a later date"))
+        if (reason != null && (reason.length > 200 || !FormValidator.cleanText(reason))) return ActionResult.Invalid(listOf("Reason is too long"))
+        val until = untilDate?.let { DoseGenerator.resolve(it.plusDays(1).atStartOfDay(), time.zone()).toEpochMilli() }
+        meds.update(med.copy(status = MedicationStatus.PAUSED, pausedUntil = until, pauseReason = reason?.trim()?.ifBlank { null }),
+            if (untilDate == null) "Paused until resumed" else "Paused until $untilDate")
         doses.deleteFuturePlanned(medicationId, time.nowMillis())
         replanner.replan()
         return ActionResult.Done
@@ -138,7 +148,34 @@ class MedicationService(
 
     suspend fun resume(medicationId: Long): ActionResult {
         val med = meds.get(medicationId) ?: return ActionResult.Invalid(listOf("Medication not found"))
-        meds.update(med.copy(status = MedicationStatus.ACTIVE), "Resumed")
+        meds.update(med.copy(status = MedicationStatus.ACTIVE, pausedUntil = null, pauseReason = null), "Resumed")
+        replanner.replan()
+        return ActionResult.Done
+    }
+
+    /** What the delete confirmation must show (E4). */
+    data class DeleteInfo(val name: String, val doseRecords: Int, val taken: Int, val required: Int?, val startedMustComplete: Boolean)
+
+    suspend fun deleteInfo(medicationId: Long): DeleteInfo? {
+        val med = meds.get(medicationId) ?: return null
+        val all = doses.forMedication(medicationId)
+        val recorded = all.filter { it.status != DoseStatus.PLANNED && it.status != DoseStatus.NOT_NEEDED }
+        val taken = all.count { it.status == DoseStatus.TAKEN }
+        val required = courseView(med)?.progress?.required
+        return DeleteInfo(med.name, recorded.size, taken, required, med.mustComplete && taken > 0)
+    }
+
+    /**
+     * E4: permanently deletes a medicine and all its records (added by mistake). [typedName] must match the name;
+     * a started must-complete course also needs [warningAcknowledged]. The caller saves an undo snapshot first.
+     */
+    suspend fun delete(medicationId: Long, typedName: String, warningAcknowledged: Boolean): ActionResult {
+        val info = deleteInfo(medicationId) ?: return ActionResult.Invalid(listOf("Medication not found"))
+        if (info.startedMustComplete && !warningAcknowledged) {
+            return ActionResult.NeedsConfirmation("This course must be completed and has already started (${info.taken} of ${info.required ?: "?"} taken).")
+        }
+        if (!typedName.trim().equals(info.name.trim(), ignoreCase = true)) return ActionResult.Invalid(listOf("Type the medicine's name exactly to confirm"))
+        meds.delete(medicationId)
         replanner.replan()
         return ActionResult.Done
     }

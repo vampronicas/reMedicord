@@ -30,7 +30,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         AuditLogEntity::class,
         SettingEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -56,8 +56,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v2 → v3: pause until a date (auto-resume) or until I resume. */
+        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE medication ADD COLUMN pausedUntil INTEGER")
+                db.execSQL("ALTER TABLE medication ADD COLUMN pauseReason TEXT")
+            }
+        }
+
         /** Migrations are added here as the schema evolves. Each one gets a test (PLAN.md §6, §11). */
-        val MIGRATIONS = arrayOf<androidx.room.migration.Migration>(MIGRATION_1_2)
+        val MIGRATIONS = arrayOf<androidx.room.migration.Migration>(MIGRATION_1_2, MIGRATION_2_3)
 
         /**
          * Opens the SQLCipher-encrypted database (PLAN.md §3).

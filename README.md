@@ -16,11 +16,16 @@ A private, offline Android app for tracking medicines: pills, liquids, eye and e
 ## Features
 - Schedules: times of day, chosen weekdays, every N hours (with quiet hours), every N days/weeks, on/off cycles, tapering, and as-needed (with minimum gap and daily maximum).
 - Exact reminders that work in Doze, after a restart (even before the first unlock), and across time-zone and daylight-saving changes. Each medicine can follow local time or keep home-time intervals.
-- Taken / Snooze / Skip from the notification or a full-screen alarm. No answer means the reminder repeats, then the dose is marked missed.
+- Taken / Later / Skip… from the notification; the full-screen reminder also offers Snooze 5/10/15 and "Don't remind me again today". No answer means the reminder repeats, then the dose is marked missed.
 - Doses that fell due while the phone was off are **not assumed**: you're asked whether you took them.
 - Must-complete courses (by days or number of doses). Missed or skipped doses push the end date back. Stopping early is only allowed on a doctor's instruction or because of a reaction.
 - Dose changes with history, skips (one dose, N doses, N days, until a date) with reasons, eye-drop spacing, and injection/patch site rotation.
-- Today view, calendar history with adherence %, late logging, and editing past doses with an audit trail.
+- Home: progress ring and next dose; Morning / Afternoon / Evening / Night sections that collapse; type icons and a colour per medicine; swipe right = Taken, swipe left = Later, with Undo.
+- "Later" and "Don't remind me again today"; doses waiting for an answer are asked about on the next open and closed as missed after 5 days.
+- Flexible schedules (e.g. 2 a day, any of morning / afternoon / evening).
+- One "Edit record" sheet per dose; past records can be corrected for 5 days.
+- Pause until a date (resumes automatically) or until you resume. Delete a medicine added by mistake (undo snapshot kept).
+- Calendar history with a per-medicine day summary, a compact medicine filter, and adherence %.
 
 ## Install (sideload)
 See [docs/INSTALL.md](docs/INSTALL.md). Requires Android 12 or newer.

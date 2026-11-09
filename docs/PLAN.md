@@ -41,6 +41,8 @@ Offline only. History is encrypted on the device. The only thing that leaves the
 | R30 | **Why the medicine is needed** is required: category (Supplement / vitamin, Treatment, Periodic e.g. deworming, Long-term, Preventive, Other) + short reason. DB schema v2, with a tested migration |
 | R31 | Calendar day tap shows a **per-medicine summary**. History has **multi-select** medicine and status filters. Today has a **date picker** and **soft status colours** (taken green, skipped grey, missed red, needs answer orange, due blue, not needed faint) |
 
+> **Enhancement backlog:** requested but not yet built items are recorded in [ENHANCEMENTS.md](ENHANCEMENTS.md).
+
 ---
 
 ## 2. Technology stack
@@ -387,6 +389,16 @@ Every phase also requires **`gradlew verifyAll` to pass** (all automated tests +
 - **Done when:** `gradlew assembleRelease` produces a signed APK that installs and opens, and the merged manifest has no INTERNET.
 
 ### Progress log (2026-11-07)
+**v1.2.0 (2026-11-09):** E1–E8 from [ENHANCEMENTS.md](ENHANCEMENTS.md):
+- time-of-day sections
+- calendar status filter removed
+- compact medicine filter
+- delete a medicine (with must-complete warning and undo snapshot)
+- one "Edit record" sheet per dose
+- bold medicine summary card
+- pause until a date (auto-resume) or until I resume (DB schema v3, tested migration)
+- modern Material 3 UI: progress ring, type icons, 8 medicine colours, swipe with Undo
+
 **v1.1.0 (2026-11-09):** the R24–R31 changes. `verifyAll` passes with **86 unit tests** (98% coverage) and **35 instrumented tests**. (The v1.1.0 commit message says "101 unit"; that count was wrong, and 86 is correct.)
 
 **Phases 0–7 are built (v1.0.0), and `gradlew verifyAll` passes:**

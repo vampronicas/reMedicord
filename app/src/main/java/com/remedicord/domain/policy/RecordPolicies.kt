@@ -45,6 +45,10 @@ object FlexiblePolicy {
                 .forEach { changes[it.id] = DoseStatus.NOT_NEEDED }
             return changes
         }
+        if (!dayOver) {
+            // Fewer than needed taken (e.g. a "Taken" was undone): times still ahead are needed again.
+            sorted.filter { it.status == DoseStatus.NOT_NEEDED && it.at.isAfter(now) }.forEach { changes[it.id] = DoseStatus.PLANNED }
+        }
         if (dayOver) {
             // Keep only as many "missing" slots as the shortfall; the earliest unresolved ones represent it.
             var need = dosesPerDay - taken - sorted.count { it.status == DoseStatus.SKIPPED }

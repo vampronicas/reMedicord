@@ -228,6 +228,8 @@ object BackupCodec {
             md.enabledSites?.let { sites -> if (sites.size > FormValidator.MAX_SITES) fail("sites"); sites.forEach { text(it, FormValidator.MAX_SHORT, "site") } }
             md.homeZone?.let { z -> if (runCatching { ZoneId.of(z) }.isFailure) fail("time zone") }
             md.courseLength?.let { if (it !in 1..1000) fail("course length") }
+            md.colorTag?.let { if (it !in 0..7) fail("colour") }
+            md.pauseReason?.let { text(it, 200, "pause reason") }
         }
         s.regimens.forEach { r ->
             if (r.medicationId !in medIds) fail("regimen without medication")

@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
@@ -65,7 +66,9 @@ fun MedicationsScreen(vm: MedicationsViewModel, onAdd: () -> Unit, onOpen: (Long
             LazyColumn {
                 items(shown, key = { it.id }) { m ->
                     ListItem(
-                        headlineContent = { Text(m.name) },
+                        leadingContent = { com.remedicord.ui.components.MedIcon(m.type, m.colorTag, 40) },
+                        headlineContent = { Text(m.name, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) },
+                        trailingContent = { if (m.status != MedicationStatus.ACTIVE) Badge(statusLabel(m), MaterialTheme.colorScheme.surfaceContainerHighest) else if (m.mustComplete) Badge("Must complete", MaterialTheme.colorScheme.errorContainer) },
                         supportingContent = {
                             Text(Labels.type(m.type) + " · " + Labels.purpose(m.purpose).substringBefore(" (") + (if (m.mustComplete) " · must complete" else "") +
                                 (m.stopReason?.let { " · " + Labels.stopReason(it) } ?: ""))

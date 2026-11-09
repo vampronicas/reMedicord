@@ -156,14 +156,34 @@ class DoseActionService(
     }
 
     /** Edit a past dose from History (status / time / note), audited (PLAN.md R12). */
-    suspend fun edit(doseId: Long, status: DoseStatus, takenAt: Instant?, note: String?): Boolean {
+    suspend fun edit(
+        doseId: Long, status: DoseStatus, takenAt: Instant?, note: String?,
+        skipReason: String? = null, site: String? = null,
+    ): Boolean {
         val d = doses.get(doseId) ?: return false
         if (status !in setOf(DoseStatus.TAKEN, DoseStatus.MISSED, DoseStatus.SKIPPED)) return false
         if (!amendable(d)) return false
         if (takenAt != null && takenAt.isAfter(time.now())) return false
         if (note != null && (note.length > FormValidator.MAX_TEXT || !FormValidator.cleanText(note, true))) return false
+        if (skipReason != null && (skipReason.length > 200 || !FormValidator.cleanText(skipReason))) return false
+        if (site != null && (site.length > FormValidator.MAX_SHORT || !FormValidator.cleanText(site))) return false
         doses.update(d.copy(status = status, takenAt = if (status == DoseStatus.TAKEN) (takenAt ?: Instant.ofEpochMilli(d.takenAt ?: d.scheduledAt ?: time.nowMillis())).toEpochMilli() else null,
-            note = note?.ifBlank { null }, skipReason = if (status == DoseStatus.SKIPPED) d.skipReason ?: "Edited" else null), "Edited in history")
+            note = note?.ifBlank { null }, pendingReason = null, remindAt = null, actionAt = time.nowMillis(),
+            isLateLog = d.isLateLog || (status == DoseStatus.TAKEN && (d.status == DoseStatus.MISSED || d.status == DoseStatus.UNCONFIRMED)),
+            site = site?.ifBlank { null } ?: d.site,
+            skipReason = if (status == DoseStatus.SKIPPED) skipReason?.ifBlank { null } ?: d.skipReason ?: "Edited" else null), "Record edited")
+        replanner.replan()
+        return true
+    }
+
+    /**
+     * Undo for the snackbar after Taken / Later / Skip (E8). Restores the dose exactly as it was before the action,
+     * but only if nothing else changed it in between. Audited like any other change.
+     */
+    suspend fun revert(before: DoseEventEntity, afterActionAt: Long?): Boolean {
+        val now = doses.get(before.id) ?: return false
+        if (afterActionAt != null && now.actionAt != afterActionAt) return false
+        doses.update(before, "Undo")
         replanner.replan()
         return true
     }

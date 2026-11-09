@@ -2,6 +2,7 @@ package com.remedicord.ui.medications
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,7 @@ import com.remedicord.data.db.entity.RegimenEntity
 import com.remedicord.data.db.entity.SkipRuleEntity
 import com.remedicord.data.repo.MedicationRepository
 import com.remedicord.data.repo.SkipRuleRepository
+import com.remedicord.domain.model.DoseStatus
 import com.remedicord.domain.model.DoseUnit
 import com.remedicord.domain.model.MedicationStatus
 import com.remedicord.domain.model.ScheduleRule
@@ -85,14 +87,22 @@ data class DetailState(
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     handle: SavedStateHandle,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val repo: MedicationRepository,
     private val skipRepo: SkipRuleRepository,
     private val service: MedicationService,
+    private val doseRepo: com.remedicord.data.repo.DoseRepository,
+    private val backup: com.remedicord.data.backup.BackupService,
     private val time: TimeProvider,
 ) : ViewModel() {
     val id: Long = checkNotNull(handle.get<Long>("id"))
     private val _s = MutableStateFlow(DetailState())
     val state: StateFlow<DetailState> = _s
+    private val _deleteInfo = MutableStateFlow<MedicationService.DeleteInfo?>(null)
+    val deleteInfo: StateFlow<MedicationService.DeleteInfo?> = _deleteInfo
+    private val _deleted = MutableStateFlow(false)
+    val deleted: StateFlow<Boolean> = _deleted
+    val today: LocalDate get() = LocalDate.now(time.zone())
 
     init {
         viewModelScope.launch {
@@ -131,7 +141,8 @@ class DetailViewModel @Inject constructor(
         run { c -> service.skip(id, mode, count, until, reason, note?.ifBlank { null }, c) }
 
     fun stop(reason: StopReason, note: String?) = run { c -> service.stop(id, reason, note?.ifBlank { null }, c) }
-    fun pause() = run { service.pause(id) }
+    /** E7: [until] null = until I resume. */
+    fun pause(until: LocalDate?, reason: String?) = run { service.pause(id, until, reason) }
     fun resume() = run { service.resume(id) }
     fun restart() = run { service.restart(id) }
     fun cancelSkip(ruleId: Long) = viewModelScope.launch { service.cancelSkip(ruleId); _s.update { it.copy(skips = skipRepo.active(id)) } }
@@ -140,47 +151,116 @@ class DetailViewModel @Inject constructor(
         val at = from?.let { DoseGenerator.resolve(it.atStartOfDay(), time.zone()) } ?: time.now()
         service.changeDose(id, amount, unit, rule, at, reason)
     }
+
+    // ---- E4 delete
+    fun askDelete() = viewModelScope.launch { _deleteInfo.value = service.deleteInfo(id) }
+    fun cancelDelete() { _deleteInfo.value = null }
+
+    fun delete(typedName: String, warningAcknowledged: Boolean) = viewModelScope.launch {
+        val info = _deleteInfo.value ?: return@launch
+        if (!typedName.trim().equals(info.name.trim(), ignoreCase = true)) return@launch
+        backup.saveSnapshot() // undo point (Backup & restore → snapshots)
+        val openSlots = doseRepo.forMedication(id).filter { it.status == DoseStatus.DUE || it.status == DoseStatus.SNOOZED }.mapNotNull { it.slotId }
+        when (val r = service.delete(id, typedName, warningAcknowledged)) {
+            ActionResult.Done -> {
+                openSlots.forEach { com.remedicord.reminders.Notifications.cancel(context, it.toInt()) }
+                _deleteInfo.value = null
+                _deleted.value = true
+            }
+            is ActionResult.Invalid -> _s.update { it.copy(message = r.errors.joinToString("\n")) }
+            is ActionResult.Blocked -> _s.update { it.copy(message = r.message) }
+            is ActionResult.NeedsConfirmation -> _s.update { it.copy(message = r.message) }
+        }
+    }
 }
 
-/** S5 medication detail with S6 change dose, S7 skip and S8 stop. */
+/** S5 medication detail (E6): bold summary card, badges, actions, danger zone. With S6–S8, pause (E7), delete (E4). */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit) {
     val s by vm.state.collectAsState()
+    val deleted by vm.deleted.collectAsState()
+    val deleteInfo by vm.deleteInfo.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(deleted) { if (deleted) onBack() }
     val m = s.med ?: return
     val current = s.regimens.lastOrNull { it.effectiveTo == null } ?: s.regimens.lastOrNull()
-    Scaffold(topBar = { TopAppBar(title = { Text(m.name) }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }) }) { pad ->
-        Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("${Labels.type(m.type)} · ${m.status.name.lowercase().replaceFirstChar(Char::uppercase)}" + (if (m.mustComplete) " · must complete" else ""))
-            Text("Why: ${Labels.purpose(m.purpose)}" + (m.purposeNote.takeIf { it.isNotBlank() }?.let { " — $it" } ?: ""))
-            m.side?.let { Text("Side: ${Labels.side(it)}") }
-            m.bodyLocation?.let { Text("Location: $it") }
-            m.dressingType?.let { Text("Dressing: $it") }
-            m.enabledSites?.let { Text("Sites: ${it.joinToString(", ")}") }
-            if (m.instructions.isNotBlank()) Text("Instructions: ${m.instructions}")
-            m.stopReason?.let { Text("Stopped: ${Labels.stopReason(it)}" + (m.stopNote?.let { n -> " — $n" } ?: "")) }
+    Scaffold(topBar = { TopAppBar(title = { Text("Medicine") }, navigationIcon = { TextButton(onClick = onBack) { Text("← Back") } }) }) { pad ->
+        Column(Modifier.fillMaxSize().padding(pad).padding(horizontal = 16.dp, vertical = 8.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // ---- hero summary card
+            androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        com.remedicord.ui.components.MedIcon(m.type, m.colorTag, 48)
+                        Column {
+                            Text(m.name, style = MaterialTheme.typography.headlineSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            Text(Labels.type(m.type), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Badge(statusLabel(m), MaterialTheme.colorScheme.primaryContainer)
+                        if (m.mustComplete) Badge("Must complete", MaterialTheme.colorScheme.errorContainer)
+                        if ((m.remindersMutedUntil ?: 0) > System.currentTimeMillis()) Badge("Reminders off today", MaterialTheme.colorScheme.tertiaryContainer)
+                    }
+                    KeyValue("Dose", current?.let { "${Labels.action(m.type)} ${Labels.dose(it.doseAmount, it.doseUnit)}" + (m.side?.let { sd -> " · ${Labels.side(sd)}" } ?: "") } ?: "—")
+                    KeyValue("Schedule", current?.let { Labels.rule(ScheduleRule.fromJson(it.scheduleRuleJson)) } ?: "—")
+                    KeyValue("Next dose", s.upcoming.firstOrNull()?.let { Labels.dateTime(it) } ?: if (m.status == MedicationStatus.ACTIVE) "—" else "None while ${statusLabel(m).lowercase()}")
+                    KeyValue("Why", Labels.purpose(m.purpose) + (m.purposeNote.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""))
+                    s.course?.let { c ->
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(Modifier.fillMaxWidth()) {
+                                Text("Course ${c.progress.taken} / ${c.progress.required} taken", Modifier.weight(1f), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text(if (c.progress.isComplete) "complete" else listOfNotNull(c.projectedEnd?.let { "ends " + Labels.date(it) },
+                                    c.progress.extension.takeIf { it > 0 }?.let { "+$it missed/skipped" }).joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { if (c.progress.required == 0) 0f else (c.progress.taken.toFloat() / c.progress.required).coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
 
-            current?.let { r ->
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        SectionTitle("Current dose")
-                        Text("${Labels.action(m.type)} ${Labels.dose(r.doseAmount, r.doseUnit)}")
-                        Text(Labels.rule(ScheduleRule.fromJson(r.scheduleRuleJson)))
+            // ---- actions
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                when (m.status) {
+                    MedicationStatus.ACTIVE -> {
+                        Button(onClick = { vm.open("dose") }) { Text("Change dose") }
+                        OutlinedButton(onClick = { vm.open("skip") }) { Text("Skip…") }
+                        OutlinedButton(onClick = { vm.open("pause") }, enabled = !m.mustComplete) { Text("Pause") }
+                        OutlinedButton(onClick = { vm.open("stop") }) { Text("Stop") }
                     }
-                }
-            }
-            s.course?.let { c ->
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        SectionTitle("Course")
-                        Text("${c.progress.taken} / ${c.progress.required} taken" + if (c.progress.extension > 0) " · +${c.progress.extension} missed/skipped" else "")
-                        Text(if (c.progress.isComplete) "Course complete" else c.projectedEnd?.let { "Projected end: ${Labels.dateTime(it)}" } ?: "")
+                    MedicationStatus.PAUSED -> {
+                        Button(onClick = vm::resume) { Text("Resume now") }
+                        OutlinedButton(onClick = { vm.open("pause") }) { Text("Change pause") }
+                        OutlinedButton(onClick = { vm.open("stop") }) { Text("Stop") }
                     }
+                    MedicationStatus.STOPPED, MedicationStatus.COMPLETED -> Button(onClick = vm::restart) { Text("Restart") }
                 }
+                OutlinedButton(onClick = { onEdit(m.id) }) { Text("Edit details") }
             }
-            if (s.upcoming.isNotEmpty()) {
-                SectionTitle("Next doses")
-                s.upcoming.forEach { Text(Labels.dateTime(it)) }
+            if (m.mustComplete && m.status == MedicationStatus.ACTIVE) Text("Must-complete courses can't be paused.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (m.status == MedicationStatus.PAUSED) Text(
+                (m.pausedUntil?.let { "Paused until ${Labels.date(Instant.ofEpochMilli(it).minusSeconds(1))}; reminders resume automatically." } ?: "Paused until you resume.") +
+                    (m.pauseReason?.let { " Reason: $it" } ?: ""),
+                style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            )
+
+            // ---- secondary sections
+            val details = listOfNotNull(
+                m.instructions.takeIf { it.isNotBlank() }?.let { "Instructions" to it },
+                m.bodyLocation?.let { "Location" to it }, m.dressingType?.let { "Dressing" to it },
+                m.enabledSites?.let { "Sites" to it.joinToString(", ") },
+                m.stopReason?.let { "Stopped" to (Labels.stopReason(it) + (m.stopNote?.let { n -> " — $n" } ?: "")) },
+            )
+            if (details.isNotEmpty()) {
+                SectionTitle("Details")
+                details.forEach { (k, v) -> Text("$k: $v", style = MaterialTheme.typography.bodyMedium) }
+            }
+            if (s.upcoming.size > 1) {
+                SectionTitle("Coming up")
+                s.upcoming.forEach { Text(Labels.dateTime(it), style = MaterialTheme.typography.bodyMedium) }
             }
             if (s.skips.isNotEmpty()) {
                 SectionTitle("Active skips")
@@ -189,23 +269,6 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit
                     TextButton(onClick = { vm.cancelSkip(r.id) }) { Text("Cancel this skip") }
                 }
             }
-            SectionTitle("Actions")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                when (m.status) {
-                    MedicationStatus.ACTIVE -> {
-                        Button(onClick = { vm.open("dose") }) { Text("Change dose") }
-                        OutlinedButton(onClick = { vm.open("skip") }) { Text("Skip…") }
-                        OutlinedButton(onClick = vm::pause) { Text("Pause") }
-                        OutlinedButton(onClick = { vm.open("stop") }) { Text("Stop") }
-                    }
-                    MedicationStatus.PAUSED -> {
-                        Button(onClick = vm::resume) { Text("Resume") }
-                        OutlinedButton(onClick = { vm.open("stop") }) { Text("Stop") }
-                    }
-                    MedicationStatus.STOPPED, MedicationStatus.COMPLETED -> Button(onClick = vm::restart) { Text("Restart") }
-                }
-                OutlinedButton(onClick = { onEdit(m.id) }) { Text("Edit details") }
-            }
             if (s.regimens.size > 1) {
                 SectionTitle("Dose history")
                 s.regimens.reversed().forEach { r ->
@@ -213,8 +276,19 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit
                         style = MaterialTheme.typography.bodySmall)
                 }
             }
+
+            // ---- danger zone (E4)
+            SectionTitle("Danger zone")
+            OutlinedButton(onClick = vm::askDelete, colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                Text("Delete medicine…")
+            }
+            Text("Only for medicines added by mistake. To end a treatment, use Stop instead (keeps history).",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+
+    deleteInfo?.let { info -> DeleteDialog(info, onCancel = vm::cancelDelete) { typed, ack -> vm.delete(typed, ack) } }
+    if (s.dialog == "pause") PauseSheet(m.name, vm.today, onDismiss = { vm.open(null) }) { until, reason -> vm.pause(until, reason) }
 
     when (s.dialog) {
         "skip" -> SkipDialog(onDismiss = { vm.open(null) }, onSkip = vm::skip)

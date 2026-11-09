@@ -24,6 +24,7 @@ import com.remedicord.domain.schedule.TaperBuilder
 import java.math.BigDecimal
 import java.time.LocalTime
 import kotlinx.coroutines.test.runTest
+import kotlin.time.Duration.Companion.minutes
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -110,7 +111,8 @@ class MedicationServiceTest {
         assertTrue(meds.regimens(id).size >= 3)
     }
 
-    @Test fun pinIsHashedLockoutPersistsAndNeverExported() = runTest {
+    // ~8 deliberately slow PBKDF2 hashes (210k rounds each) on a slow emulator: allow more than the 1-minute default.
+    @Test fun pinIsHashedLockoutPersistsAndNeverExported() = runTest(timeout = 3.minutes) {
         val settings = SettingsRepository(db)
         var clock = 1_000L
         val pins = PinRepository(settings) { clock }
