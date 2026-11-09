@@ -387,6 +387,8 @@ Every phase also requires **`gradlew verifyAll` to pass** (all automated tests +
 - **Done when:** `gradlew assembleRelease` produces a signed APK that installs and opens, and the merged manifest has no INTERNET.
 
 ### Progress log (2026-11-07)
+**v1.1.0 (2026-11-09):** the R24–R31 changes. `verifyAll` passes with **86 unit tests** (98% coverage) and **35 instrumented tests**. (The v1.1.0 commit message says "101 unit"; that count was wrong, and 86 is correct.)
+
 **Phases 0–7 are built (v1.0.0), and `gradlew verifyAll` passes:**
 - 74 unit tests and 31 instrumented tests on the managed emulator (Pixel 6, API 34 ATD).
 - Coverage 97.7% (domain + backup validation).
