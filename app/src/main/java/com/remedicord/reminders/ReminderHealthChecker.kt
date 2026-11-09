@@ -23,7 +23,7 @@ class ReminderHealthChecker(private val context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
         val am = context.getSystemService(AlarmManager::class.java)
         val pm = context.getSystemService(PowerManager::class.java)
-        val channelOn = nm.getNotificationChannel(Notifications.CH_REMINDERS)?.importance != NotificationManager.IMPORTANCE_NONE
+        val channelOn = nm.getNotificationChannel(Notifications.reminderChannelId(context))?.importance != NotificationManager.IMPORTANCE_NONE
         return listOf(
             Item(Key.NOTIFICATIONS, "Notifications allowed", NotificationManagerCompat.from(context).areNotificationsEnabled(),
                 "Reminders are shown as notifications. Without this permission you won't see or hear them.",
@@ -31,7 +31,7 @@ class ReminderHealthChecker(private val context: Context) {
             Item(Key.CHANNEL, "Reminder sound on", channelOn,
                 "The \"Medication reminders\" notification category must not be turned off.",
                 Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    .putExtra(Settings.EXTRA_CHANNEL_ID, Notifications.CH_REMINDERS)),
+                    .putExtra(Settings.EXTRA_CHANNEL_ID, Notifications.reminderChannelId(context))),
             Item(Key.EXACT_ALARMS, "Exact alarms allowed", am.canScheduleExactAlarms(),
                 "Lets reminders ring at the exact minute, like the Clock app, even when the phone is in deep sleep (Doze).",
                 Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg)),

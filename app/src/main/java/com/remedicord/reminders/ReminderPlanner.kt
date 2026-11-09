@@ -185,7 +185,7 @@ class ReminderPlanner(
                     val lastTaken = rows.filter { it.status == DoseStatus.TAKEN }.mapNotNull { it.takenAt }.maxOrNull()?.let(Instant::ofEpochMilli)
                     rows.filter { it.status == DoseStatus.PLANNED }.forEach { r ->
                         val want = FlexiblePolicy.remindAt(Instant.ofEpochMilli(r.scheduledAt!!), lastTaken, rule.minGapMinutes).toEpochMilli()
-                        if (r.remindAt != want && want < DoseGenerator.resolve(today.plusDays(1).atStartOfDay(), zone).toEpochMilli()) {
+                        if ((r.remindAt == null || want > r.remindAt) && want < DoseGenerator.resolve(today.plusDays(1).atStartOfDay(), zone).toEpochMilli()) {
                             dao.update(r.copy(remindAt = want, updatedAt = nowMs))
                         }
                     }

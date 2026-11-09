@@ -46,7 +46,29 @@ class SettingsViewModel @Inject constructor(
     private val lock: AppLockManager,
     private val reminderSettings: ReminderSettingsRepository,
     private val replanner: Replanner,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
+    private val _sound = MutableStateFlow(com.remedicord.reminders.Notifications.currentSound(context))
+    val sound: StateFlow<com.remedicord.reminders.Notifications.ReminderSound> = _sound
+    private var player: android.media.MediaPlayer? = null
+
+    /** v1.3: changes the reminder sound (recreates the notification channel with the new sound). */
+    fun setSound(s: com.remedicord.reminders.Notifications.ReminderSound) {
+        com.remedicord.reminders.Notifications.setReminderSound(context, s)
+        _sound.value = s
+    }
+
+    /** Plays a short preview of the chosen sound. */
+    fun preview(s: com.remedicord.reminders.Notifications.ReminderSound) {
+        player?.release(); player = null
+        when {
+            s.rawRes != null -> player = android.media.MediaPlayer.create(context, s.rawRes)?.apply { setOnCompletionListener { it.release(); if (player === it) player = null }; start() }
+            s == com.remedicord.reminders.Notifications.ReminderSound.DEFAULT ->
+                android.media.RingtoneManager.getRingtone(context, android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION))?.play()
+        }
+    }
+
+    override fun onCleared() { player?.release(); player = null }
     private val _timeout = MutableStateFlow((lock.timeoutMs / 60_000).toInt())
     val timeoutMin: StateFlow<Int> = _timeout
     private val _reminders = MutableStateFlow(ReminderSettings())
@@ -80,6 +102,13 @@ fun SettingsScreen(vm: SettingsViewModel, onHealth: () -> Unit, onBackup: () -> 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle("Reminders")
         Button(onClick = onHealth) { Text("Reminder health check") }
+        val currentSound by vm.sound.collectAsState()
+        Text("Reminder sound")
+        ChoiceChips(com.remedicord.reminders.Notifications.ReminderSound.entries, currentSound, { it.label }) { vm.setSound(it) }
+        androidx.compose.material3.OutlinedButton(onClick = { vm.preview(currentSound) }, enabled = currentSound != com.remedicord.reminders.Notifications.ReminderSound.SILENT) {
+            Text("Play \"${currentSound.label}\"")
+        }
+        Text("Gentle tones made for reMedicord. The sound follows your phone's notification volume and Do Not Disturb.", style = MaterialTheme.typography.bodySmall)
         Text("Default snooze")
         ChoiceChips(listOf(5, 10, 15, 30), r.snoozeMinutes, { "$it min" }) { m -> vm.updateReminders { it.copy(snoozeMinutes = m) } }
         Text("If there's no answer, remind again every")

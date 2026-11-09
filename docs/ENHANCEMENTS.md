@@ -162,3 +162,12 @@ Then:
 - E5 and E1 change both main screens together, so they're best built in the same round.
 - E8 overlaps E1, E3, E5, E6 and E7 (sheets, sections, detail card). Recommended order: build E8's shared components first (sheet, card, icons, colours), then E1 / E5 / E6 / E3 on top, then E4 and E7.
 - Every item gets unit and/or emulator tests, and must pass `verifyAll` before release.
+
+---
+
+## v1.3.0 batch (requested 2026-11-09, built 2026-11-10) ✅
+- **E9 Group actions:** "All taken (n)" / "Skip all…" at the top of a Home section (2+ open doses), with a reason for skipping, a must-complete warning, and one Undo for the group.
+- **E10 Postpone reminders:** next 1–3 reminders of **all** medicines by 1–12 hours. Only the reminder moves (the dose keeps its due time). Never pushed past the same medicine's next dose.
+- **E11 Reminder sound:** 3 gentle tones made for the app (Gentle chime, Soft beep, Calm bell; quiet and short), phone default, or silent; with a preview. Android fixes a channel's sound, so each choice creates a fresh reminder channel.
+- **E12** "Danger zone" heading renamed **"Added by mistake?"**.
+- **E13** Medicine reason details are **optional**; the category stays required.

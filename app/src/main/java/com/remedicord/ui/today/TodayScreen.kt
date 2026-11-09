@@ -24,6 +24,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -144,6 +145,23 @@ class TodayViewModel @Inject constructor(
 
     fun undo(u: RecordSupport.Undoable) = viewModelScope.launch { if (!support.undo(u)) _message.value = "Couldn't undo: the record was changed again." }
 
+    /** v1.3 group action for a section. Returns undo handles (empty = nothing changed). */
+    suspend fun group(items: List<DoseItem>, taken: Boolean, reason: String?): List<RecordSupport.Undoable> =
+        support.group(items, taken, reason).also { if (it.isEmpty()) _message.value = "Nothing in this section could be changed." }
+
+    fun undoAll(list: List<RecordSupport.Undoable>) = viewModelScope.launch {
+        if (!support.undoAll(list)) _message.value = "Some records were changed again and couldn't be undone."
+    }
+
+    /** v1.3: postpone the next [count] reminders (all medicines) by [hours]. */
+    fun postpone(count: Int, hours: Int) = viewModelScope.launch {
+        val moves = support.postpone(count, hours)
+        _message.value = if (moves.isEmpty()) "There are no upcoming reminders to postpone."
+        else "Reminders postponed:\n" + moves.groupBy { it.from }.entries.joinToString("\n") { (from, ms) ->
+            "${Labels.dateTime(from, support.zone)} → ${Labels.time(ms.first().to, support.zone)} (${ms.size} dose${if (ms.size == 1) "" else "s"})"
+        } + "\nDoses keep their original due time."
+    }
+
     fun pauseToday(medId: Long) = viewModelScope.launch { support.pauseToday(medId); _message.value = "No more reminders for this medicine today. Fill in the doses later." }
 
     fun prnTake(medId: Long, confirmed: Boolean = false) = viewModelScope.launch {
@@ -182,6 +200,16 @@ fun TodayScreen(vm: TodayViewModel, onReview: () -> Unit = {}) {
         val u = vm.quick(item, a) ?: return@launch
         if (snackbar.showSnackbar(u.message, actionLabel = "Undo", withDismissAction = true) == SnackbarResult.ActionPerformed) vm.undo(u)
     }
+    var skipGroup by remember { mutableStateOf<Pair<String, List<DoseItem>>?>(null) }
+    var postponeOpen by remember { mutableStateOf(false) }
+
+    /** v1.3: settle a whole section at once, with one Undo for the group. */
+    fun runGroup(items: List<DoseItem>, taken: Boolean, reason: String?, label: String) = scope.launch {
+        val list = vm.group(items, taken, reason)
+        if (list.isEmpty()) return@launch
+        val msg = "$label: ${list.size} ${if (taken) "marked as taken" else "skipped"}"
+        if (snackbar.showSnackbar(msg, actionLabel = "Undo", withDismissAction = true) == SnackbarResult.ActionPerformed) vm.undoAll(list)
+    }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = MaterialTheme.colorScheme.background) { pad ->
         Column(
@@ -202,6 +230,7 @@ fun TodayScreen(vm: TodayViewModel, onReview: () -> Unit = {}) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 DatePickerButton("Go to", day) { vm.goTo(it) }
                 if (!isToday) TextButton(onClick = { vm.goTo(vm.today) }) { Text("Back to today") }
+                if (isToday) TextButton(onClick = { postponeOpen = true }) { Text("Postpone reminders") }
             }
 
             if (isToday) ProgressHero(items, vm)
@@ -231,6 +260,11 @@ fun TodayScreen(vm: TodayViewModel, onReview: () -> Unit = {}) {
                     if (statuses.any { it == DoseStatus.DUE || it == DoseStatus.SNOOZED }) append(" · due now")
                 }
                 CollapsibleSection(section.label, summary, attention, DaySection.startsExpanded(section, statuses, now, isToday), key = "$day-${section.name}") {
+                    val groupable = vm.support.groupable(list, isToday)
+                    if (groupable.size >= 2) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FilledTonalButton(onClick = { runGroup(groupable, true, null, section.label) }) { Text("All taken (${groupable.size})") }
+                        OutlinedButton(onClick = { skipGroup = section.label to groupable }) { Text("Skip all…") }
+                    }
                     list.forEach { item ->
                         val d = item.dose
                         val open = isToday && d.status in OPEN_TODAY
@@ -262,6 +296,10 @@ fun TodayScreen(vm: TodayViewModel, onReview: () -> Unit = {}) {
     }
 
     sheet?.let { (item, model) -> RecordSheet(model, onDismiss = vm::closeSheet) { vm.saveSheet(item, it) } }
+    skipGroup?.let { (label, items) ->
+        SkipGroupDialog(label, items, onDismiss = { skipGroup = null }) { reason -> skipGroup = null; runGroup(items, false, reason, label) }
+    }
+    if (postponeOpen) PostponeSheet(onDismiss = { postponeOpen = false }) { count, hours -> postponeOpen = false; vm.postpone(count, hours) }
     message?.let { AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
     prnConfirm?.let { (medId, text) ->
         AlertDialog(onDismissRequest = vm::dismiss, text = { Text(text) },
@@ -316,6 +354,63 @@ private fun ProgressHero(items: List<DoseItem>, vm: TodayViewModel) {
                     Text("Next: ${it.med.name} at ${Labels.time(vm.support.dueAt(it.dose), vm.support.zone)}",
                         style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
                 }
+            }
+        }
+    }
+}
+
+/** v1.3: "Skip all" for a section, with a reason; warns when a must-complete course is included. */
+@Composable
+private fun SkipGroupDialog(label: String, items: List<DoseItem>, onDismiss: () -> Unit, onSkip: (String) -> Unit) {
+    var reason by remember { mutableStateOf<String?>(null) }
+    val mustComplete = items.filter { it.med.mustComplete }.map { it.med.name }.distinct()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Skip all $label doses?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(items.joinToString(", ") { it.med.name })
+                if (mustComplete.isNotEmpty()) Text("${mustComplete.joinToString(", ")} must be completed. Skipping moves the course end back by one dose.",
+                    color = MaterialTheme.colorScheme.error)
+                Text("Reason", style = MaterialTheme.typography.labelLarge)
+                com.remedicord.ui.components.ChoiceChips(com.remedicord.domain.policy.SkipPolicy.PRESET_REASONS, reason, { it }) { reason = it }
+            }
+        },
+        confirmButton = { TextButton(enabled = reason != null, onClick = { onSkip(reason!!) }) { Text("Skip all") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** v1.3: postpone the next 1–3 reminders (all medicines) by 1–12 hours. Doses keep their due time. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun PostponeSheet(onDismiss: () -> Unit, onPostpone: (Int, Int) -> Unit) {
+    var count by remember { mutableStateOf(1) }
+    var hours by remember { mutableStateOf(2) }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Postpone reminders", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("Moves the next reminders of all medicines later, e.g. for a quiet early morning. The doses keep their original due time.",
+                style = MaterialTheme.typography.bodyMedium)
+            Text("How many upcoming reminders", style = MaterialTheme.typography.labelLarge)
+            androidx.compose.material3.SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                (1..3).forEach { n ->
+                    SegmentedButton(selected = count == n, onClick = { count = n },
+                        shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(n - 1, 3)) { Text(if (n == 1) "Next 1" else "Next $n") }
+                }
+            }
+            Text("By how many hours", style = MaterialTheme.typography.labelLarge)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                FilledTonalIconButton(onClick = { hours = (hours - 1).coerceAtLeast(1) }, modifier = Modifier.semantics { contentDescription = "Fewer hours" }) { Text("−") }
+                Text("$hours hour${if (hours == 1) "" else "s"}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                FilledTonalIconButton(onClick = { hours = (hours + 1).coerceAtMost(12) }, modifier = Modifier.semantics { contentDescription = "More hours" }) { Text("+") }
+            }
+            Text("A reminder is never moved past that medicine's next dose. 1–12 hours.", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                OutlinedButton(onClick = onDismiss) { Text("Cancel") }
+                Button(onClick = { onPostpone(count, hours) }) { Text("Postpone") }
             }
         }
     }

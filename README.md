@@ -26,6 +26,8 @@ A private, offline Android app for tracking medicines: pills, liquids, eye and e
 - One "Edit record" sheet per dose; past records can be corrected for 5 days.
 - Pause until a date (resumes automatically) or until you resume. Delete a medicine added by mistake (undo snapshot kept).
 - Calendar history with a per-medicine day summary, a compact medicine filter, and adherence %.
+- "All taken" / "Skip all" for a whole morning (or any section), with Undo. Postpone the next 1–3 reminders by a few hours.
+- Gentle reminder sounds made for the app (chime, soft beep, bell), or phone default or silent.
 
 ## Install (sideload)
 See [docs/INSTALL.md](docs/INSTALL.md). Requires Android 12 or newer.

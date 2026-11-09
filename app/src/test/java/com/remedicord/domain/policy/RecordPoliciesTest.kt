@@ -127,7 +127,8 @@ class HistoryFiltersAndPurposeTest {
         val base = MedicationForm(name = "Vit D", rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0))))
         assertTrue(FormValidator.validate(base).contains("Choose why this medicine is taken"))
         val withPurpose = base.copy(purpose = com.remedicord.domain.model.MedicationPurpose.SUPPLEMENT)
-        assertTrue(FormValidator.validate(withPurpose).any { it.startsWith("Describe why") })
+        // v1.3: the details text is optional; only the category is required.
+        assertEquals(emptyList<String>(), FormValidator.validate(withPurpose))
         assertEquals(emptyList<String>(), FormValidator.validate(withPurpose.copy(purposeNote = "Vitamin D supplement")))
         assertTrue(FormValidator.validate(withPurpose.copy(purposeNote = "x".repeat(201))).isNotEmpty())
     }

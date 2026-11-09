@@ -59,7 +59,6 @@ object FormValidator {
         if (name.length > MAX_NAME) add("Name is too long (max $MAX_NAME)")
         if (!cleanText(name)) add("Name contains invalid characters")
         if (f.purpose == null) add("Choose why this medicine is taken")
-        if (f.purposeNote.isBlank()) add("Describe why it's needed (e.g. \"Vitamin D supplement\", \"Throat infection\")")
         if (f.colorIndex != null && f.colorIndex !in 0..7) add("Invalid colour")
         if (f.purposeNote.length > 200 || !cleanText(f.purposeNote)) add("Reason is too long or contains invalid characters")
         if (f.instructions.length > MAX_TEXT || !cleanText(f.instructions, allowNewlines = true)) add("Instructions are too long or contain invalid characters")

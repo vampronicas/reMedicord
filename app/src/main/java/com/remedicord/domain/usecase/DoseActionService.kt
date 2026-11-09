@@ -176,6 +176,22 @@ class DoseActionService(
         return true
     }
 
+    /** v1.3: postpone the next [count] reminders (all medicines) by [hours]. Returns what moved (empty = nothing to move). */
+    suspend fun postpone(count: Int, hours: Int): List<com.remedicord.domain.policy.PostponePolicy.Move> {
+        if (count !in com.remedicord.domain.policy.PostponePolicy.COUNTS || hours !in com.remedicord.domain.policy.PostponePolicy.HOURS) return emptyList()
+        val now = time.now()
+        val upcoming = doses.awaiting(now.toEpochMilli(), now.plus(java.time.Duration.ofDays(3)).toEpochMilli())
+            .filter { it.status == DoseStatus.PLANNED || it.status == DoseStatus.SNOOZED }
+            .mapNotNull { d ->
+                val s = d.scheduledAt ?: return@mapNotNull null
+                com.remedicord.domain.policy.PostponePolicy.Dose(d.id, d.medicationId, Instant.ofEpochMilli(s), Instant.ofEpochMilli(d.remindAt ?: s))
+            }
+        val moves = com.remedicord.domain.policy.PostponePolicy.plan(upcoming, count, hours, now)
+        moves.forEach { m -> doses.get(m.id)?.let { doses.update(it.copy(remindAt = m.to.toEpochMilli()), "Reminder postponed $hours h") } }
+        if (moves.isNotEmpty()) replanner.replan()
+        return moves
+    }
+
     /**
      * Undo for the snackbar after Taken / Later / Skip (E8). Restores the dose exactly as it was before the action,
      * but only if nothing else changed it in between. Audited like any other change.

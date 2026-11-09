@@ -61,6 +61,8 @@ class RecordSupport @Inject constructor(
             DoseStatus.MISSED -> "Missed" + (d.skipReason?.let { " · $it" } ?: "")
             DoseStatus.NOT_NEEDED -> "Not needed · today's doses already taken"
             DoseStatus.SNOOZED -> "Snoozed" + (d.remindAt?.let { " until " + Labels.time(Instant.ofEpochMilli(it), zone) } ?: "")
+            DoseStatus.PLANNED -> if (d.remindAt != null && d.scheduledAt != null && d.remindAt > d.scheduledAt)
+                "Upcoming · reminder postponed to " + Labels.time(Instant.ofEpochMilli(d.remindAt), zone) else "Upcoming"
             else -> Labels.status(d.status)
         }
         return DoseCardModel(m.type, m.colorTag, m.name, listOfNotNull(time, dose, where, if (d.isPrn) "as needed" else null).joinToString(" · "), d.status, status)
@@ -118,6 +120,31 @@ class RecordSupport @Inject constructor(
     }
 
     suspend fun undo(u: Undoable): Boolean = actions.revert(u.before, u.actionAt)
+
+    /** v1.3: doses in a section that a group action can settle (open today, or waiting for an answer within 5 days). */
+    fun groupable(items: List<DoseItem>, isToday: Boolean): List<DoseItem> = items.filter {
+        (isToday && it.dose.status in setOf(DoseStatus.PLANNED, DoseStatus.DUE, DoseStatus.SNOOZED)) ||
+            (it.dose.status == DoseStatus.UNCONFIRMED && actions.amendable(it.dose))
+    }
+
+    /** "All taken" / "Skip all" for a time-of-day section. Returns one undo handle per changed dose. */
+    suspend fun group(items: List<DoseItem>, taken: Boolean, reason: String?): List<Undoable> {
+        val s = reminderSettings.load()
+        return items.mapNotNull { item ->
+            val before = doses.get(item.dose.id) ?: return@mapNotNull null
+            val ok = when (before.status) {
+                DoseStatus.UNCONFIRMED -> actions.review(before.id, if (taken) DoseActionService.ReviewAnswer.TAKEN else DoseActionService.ReviewAnswer.SKIPPED, null, reason)
+                DoseStatus.PLANNED, DoseStatus.DUE, DoseStatus.SNOOZED ->
+                    if (taken) actions.take(before.id, now(), null, null, s.eyeDropGapMinutes) else actions.skip(before.id, reason ?: "Skipped")
+                else -> false
+            }
+            if (ok) Undoable(before, doses.get(before.id)?.actionAt, "") else null
+        }.also { if (it.isNotEmpty()) actions.finishReview() }
+    }
+
+    suspend fun undoAll(list: List<Undoable>): Boolean = list.reversed().map { actions.revert(it.before, it.actionAt) }.all { it }
+
+    suspend fun postpone(count: Int, hours: Int) = actions.postpone(count, hours)
 
     suspend fun pauseToday(medId: Long) = actions.pauseToday(medId)
 

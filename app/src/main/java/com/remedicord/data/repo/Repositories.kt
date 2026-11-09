@@ -104,6 +104,7 @@ class DoseRepository(
     suspend fun inSlot(slotId: Long): List<DoseEventEntity> = doses.inSlot(slotId)
     suspend fun forMedication(medicationId: Long): List<DoseEventEntity> = doses.forMedication(medicationId)
     suspend fun countWithStatus(medicationId: Long, status: DoseStatus): Int = doses.countWithStatus(medicationId, status)
+    suspend fun awaiting(fromInclusive: Long, toExclusive: Long): List<DoseEventEntity> = doses.awaitingReminder(fromInclusive, toExclusive)
     suspend fun countUnconfirmed(): Int = doses.withStatus(DoseStatus.UNCONFIRMED).size
 
     /** Planner output: system-generated, not audited (nothing a user changed yet). */

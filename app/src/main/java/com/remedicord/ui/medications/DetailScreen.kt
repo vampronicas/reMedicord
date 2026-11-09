@@ -277,12 +277,12 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit
                 }
             }
 
-            // ---- danger zone (E4)
-            SectionTitle("Danger zone")
+            // ---- delete (E4)
+            SectionTitle("Added by mistake?")
             OutlinedButton(onClick = vm::askDelete, colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                 Text("Delete medicine…")
             }
-            Text("Only for medicines added by mistake. To end a treatment, use Stop instead (keeps history).",
+            Text("Deleting removes this medicine and all its records. To end a treatment, use Stop instead (keeps history).",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
