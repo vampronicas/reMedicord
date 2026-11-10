@@ -1,5 +1,6 @@
 package com.remedicord.ui.medications
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -51,7 +52,8 @@ private val dayFmt = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
 
 fun statusLabel(m: MedicationEntity) = when (m.status) {
     MedicationStatus.ACTIVE -> "Active"; MedicationStatus.PAUSED -> "Paused"
-    MedicationStatus.STOPPED -> "Stopped"; MedicationStatus.COMPLETED -> "Completed"
+    MedicationStatus.STOPPED -> if (m.stopReason == com.remedicord.domain.model.StopReason.REPLACED) (m.stopNote?.substringBefore(" to")?.substringBefore(" by") ?: "Replaced") else "Stopped"
+    MedicationStatus.COMPLETED -> "Completed"
 }
 
 @Composable
@@ -161,4 +163,34 @@ fun DeleteDialog(info: MedicationService.DeleteInfo, onCancel: () -> Unit, onDel
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Keep it") } },
     )
+}
+
+/** v1.4: tappable link between a replaced medicine and its replacement. */
+@Composable
+fun LinkCard(title: String, subtitle: String, arrow: String, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall)
+            }
+            Text(arrow, style = MaterialTheme.typography.titleLarge)
+        }
+    }
+}
+
+/** v1.4: one change-history entry: date, what changed (bold), details. */
+@Composable
+fun HistoryRow(e: com.remedicord.ui.ChangeHistory.Entry) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(com.remedicord.ui.Labels.date(e.at).substringBeforeLast(' ').removeSuffix(","), Modifier.width(92.dp),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.weight(1f)) {
+            Text(e.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            e.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    }
 }

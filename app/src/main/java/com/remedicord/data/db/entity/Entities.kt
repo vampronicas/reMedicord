@@ -66,6 +66,13 @@ data class MedicationEntity(
     /** Paused until this instant (schema v3). Null while PAUSED = "until I resume". */
     val pausedUntil: Long? = null,
     val pauseReason: String? = null,
+    /** v1.4 replacement links (schema v4): this medicine replaced [replacesId]; it was replaced by [replacedById] at [replacedAt]. */
+    val replacesId: Long? = null,
+    val replacedById: Long? = null,
+    val replacedAt: Long? = null,
+    /** v1.4: when the current pause started; kind of replacement this medicine is (on the NEW entry). */
+    val pausedAt: Long? = null,
+    val replaceKind: com.remedicord.domain.model.ReplaceKind? = null,
 )
 
 @Serializable

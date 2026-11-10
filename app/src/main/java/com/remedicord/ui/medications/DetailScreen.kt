@@ -82,6 +82,10 @@ data class DetailState(
     /** Message from the last action (blocked / confirmation / error). */
     val message: String? = null,
     val pendingConfirm: (suspend () -> ActionResult)? = null,
+    /** v1.4 */
+    val history: List<com.remedicord.ui.ChangeHistory.Entry> = emptyList(),
+    val replacedBy: MedicationEntity? = null,
+    val replaces: MedicationEntity? = null,
 )
 
 @HiltViewModel
@@ -93,6 +97,7 @@ class DetailViewModel @Inject constructor(
     private val service: MedicationService,
     private val doseRepo: com.remedicord.data.repo.DoseRepository,
     private val backup: com.remedicord.data.backup.BackupService,
+    private val auditDao: com.remedicord.data.db.dao.AuditLogDao,
     private val time: TimeProvider,
 ) : ViewModel() {
     val id: Long = checkNotNull(handle.get<Long>("id"))
@@ -111,7 +116,14 @@ class DetailViewModel @Inject constructor(
                 val upcoming = if (m?.status == MedicationStatus.ACTIVE)
                     DoseGenerator.generate(r.map { it.toDomain() }, zone, time.now(), time.now().plus(Duration.ofDays(14))).take(5).map { it.at }
                 else emptyList()
-                _s.update { it.copy(med = m, regimens = r, upcoming = upcoming, skips = skipRepo.active(id), course = m?.let { x -> service.courseView(x) }) }
+                val history = com.remedicord.ui.ChangeHistory.build(
+                    auditDao.forEntity(com.remedicord.data.repo.AuditLogger.MEDICATION, id),
+                    r.flatMap { reg -> auditDao.forEntity(com.remedicord.data.repo.AuditLogger.REGIMEN, reg.id) }, time.zone(),
+                )
+                _s.update {
+                    it.copy(med = m, regimens = r, upcoming = upcoming, skips = skipRepo.active(id), course = m?.let { x -> service.courseView(x) },
+                        history = history, replacedBy = m?.replacedById?.let { o -> repo.get(o) }, replaces = m?.replacesId?.let { o -> repo.get(o) })
+                }
             }
         }
     }
@@ -177,7 +189,10 @@ class DetailViewModel @Inject constructor(
 /** S5 medication detail (E6): bold summary card, badges, actions, danger zone. With S6–S8, pause (E7), delete (E4). */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit) {
+fun DetailScreen(
+    vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit,
+    onOpenMedication: (Long) -> Unit = {}, onReplace: (Long) -> Unit = {},
+) {
     val s by vm.state.collectAsState()
     val deleted by vm.deleted.collectAsState()
     val deleteInfo by vm.deleteInfo.collectAsState()
@@ -186,6 +201,14 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit
     val current = s.regimens.lastOrNull { it.effectiveTo == null } ?: s.regimens.lastOrNull()
     Scaffold(topBar = { TopAppBar(title = { Text("Medicine") }, navigationIcon = { TextButton(onClick = onBack) { Text("← Back") } }) }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).padding(horizontal = 16.dp, vertical = 8.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // ---- v1.4 replacement links (tap to move between the old and the new medicine)
+            s.replacedBy?.let { n ->
+                LinkCard("${Labels.replacedTo(n.replaceKind)} ${n.name}", "on ${m.replacedAt?.let { Labels.date(Instant.ofEpochMilli(it)) } ?: "?"} · tap to open", "›") { onOpenMedication(n.id) }
+            }
+            s.replaces?.let { o ->
+                LinkCard("${Labels.replacedFrom(m.replaceKind)} ${o.name}", "since ${o.replacedAt?.let { Labels.date(Instant.ofEpochMilli(it)) } ?: Labels.date(Instant.ofEpochMilli(m.createdAt))} · tap to open", "‹") { onOpenMedication(o.id) }
+            }
+
             // ---- hero summary card
             androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -207,12 +230,11 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit
                     KeyValue("Why", Labels.purpose(m.purpose) + (m.purposeNote.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""))
                     s.course?.let { c ->
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(Modifier.fillMaxWidth()) {
-                                Text("Course ${c.progress.taken} / ${c.progress.required} taken", Modifier.weight(1f), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                                Text(if (c.progress.isComplete) "complete" else listOfNotNull(c.projectedEnd?.let { "ends " + Labels.date(it) },
-                                    c.progress.extension.takeIf { it > 0 }?.let { "+$it missed/skipped" }).joinToString(" · "),
-                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            // Stacked (not side by side), so a long end-date line can't squeeze the title into one letter per line.
+                            Text("Course: ${c.progress.taken} / ${c.progress.required} taken", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            Text(if (c.progress.isComplete) "Course complete" else listOfNotNull(c.projectedEnd?.let { "Ends " + Labels.date(it) },
+                                c.progress.extension.takeIf { it > 0 }?.let { "+$it missed or skipped" }).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             androidx.compose.material3.LinearProgressIndicator(
                                 progress = { if (c.progress.required == 0) 0f else (c.progress.taken.toFloat() / c.progress.required).coerceIn(0f, 1f) },
                                 modifier = Modifier.fillMaxWidth(),
@@ -230,11 +252,13 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit
                         OutlinedButton(onClick = { vm.open("skip") }) { Text("Skip…") }
                         OutlinedButton(onClick = { vm.open("pause") }, enabled = !m.mustComplete) { Text("Pause") }
                         OutlinedButton(onClick = { vm.open("stop") }) { Text("Stop") }
+                        OutlinedButton(onClick = { onReplace(m.id) }) { Text("Replace…") }
                     }
                     MedicationStatus.PAUSED -> {
                         Button(onClick = vm::resume) { Text("Resume now") }
                         OutlinedButton(onClick = { vm.open("pause") }) { Text("Change pause") }
                         OutlinedButton(onClick = { vm.open("stop") }) { Text("Stop") }
+                        OutlinedButton(onClick = { onReplace(m.id) }) { Text("Replace…") }
                     }
                     MedicationStatus.STOPPED, MedicationStatus.COMPLETED -> Button(onClick = vm::restart) { Text("Restart") }
                 }
@@ -269,12 +293,11 @@ fun DetailScreen(vm: DetailViewModel, onBack: () -> Unit, onEdit: (Long) -> Unit
                     TextButton(onClick = { vm.cancelSkip(r.id) }) { Text("Cancel this skip") }
                 }
             }
-            if (s.regimens.size > 1) {
-                SectionTitle("Dose history")
-                s.regimens.reversed().forEach { r ->
-                    Text("${Labels.date(Instant.ofEpochMilli(r.effectiveFrom))}: ${Labels.dose(r.doseAmount, r.doseUnit)}, ${Labels.rule(ScheduleRule.fromJson(r.scheduleRuleJson))} — ${r.changeReason}",
-                        style = MaterialTheme.typography.bodySmall)
-                }
+            if (s.history.isNotEmpty()) {
+                SectionTitle("Change history")
+                var showAll by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+                (if (showAll) s.history else s.history.take(6)).forEach { e -> HistoryRow(e) }
+                if (s.history.size > 6) TextButton(onClick = { showAll = !showAll }) { Text(if (showAll) "Show less" else "Show all (${s.history.size})") }
             }
 
             // ---- delete (E4)
@@ -350,7 +373,7 @@ private fun StopDialog(onDismiss: () -> Unit, onStop: (StopReason, String?) -> U
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Why are you stopping?")
-                ChoiceChips(StopReason.entries, reason, Labels::stopReason) { reason = it }
+                ChoiceChips(StopReason.entries.filter { it != StopReason.REPLACED }, reason, Labels::stopReason) { reason = it }
                 OutlinedTextField(note, { if (it.length <= 500) note = it }, label = { Text("Note") })
             }
         },

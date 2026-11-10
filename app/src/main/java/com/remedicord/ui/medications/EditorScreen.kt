@@ -83,6 +83,10 @@ data class EditorState(
     val errors: List<String> = emptyList(),
     val saved: Boolean = false,
     val original: MedicationEntity? = null,
+    /** v1.4: replacing this medicine (new linked entry; the old one stops). */
+    val replacing: MedicationEntity? = null,
+    val replaceKind: com.remedicord.domain.model.ReplaceKind = com.remedicord.domain.model.ReplaceKind.UPGRADE,
+    val confirm: String? = null,
 )
 
 @HiltViewModel
@@ -104,6 +108,20 @@ class EditorViewModel @Inject constructor(
                         foodRelation = m.foodRelation, side = m.side, bodyLocation = m.bodyLocation.orEmpty(),
                         dressingType = m.dressingType.orEmpty(), sites = m.enabledSites.orEmpty(), timeZoneMode = m.timeZoneMode))
                 }
+            }
+        }
+        val replaces = handle.get<Long>("replaces")?.takeIf { it > 0 }
+        if (replaces != null) viewModelScope.launch {
+            val m = repo.get(replaces) ?: return@launch
+            val reg = repo.activeRegimen(replaces, System.currentTimeMillis()) ?: repo.regimens(replaces).lastOrNull()
+            val rule = reg?.let { r -> runCatching { ScheduleRule.fromJson(r.scheduleRuleJson) }.getOrNull() }
+            _s.update {
+                it.copy(replacing = m, step = 1, amountText = reg?.doseAmount?.stripTrailingZeros()?.toPlainString() ?: "1",
+                    rule = rule?.let { r -> RuleDraft.from(r) } ?: RuleDraft(),
+                    form = it.form.copy(name = m.name, type = m.type, instructions = m.instructions, purpose = m.purpose, purposeNote = m.purposeNote,
+                        colorIndex = m.colorTag, foodRelation = m.foodRelation, side = m.side, bodyLocation = m.bodyLocation.orEmpty(),
+                        dressingType = m.dressingType.orEmpty(), sites = m.enabledSites.orEmpty(), timeZoneMode = m.timeZoneMode,
+                        unit = reg?.doseUnit ?: Labels.defaultUnit(m.type), mustComplete = m.mustComplete, courseMode = m.courseMode, courseLength = m.courseLength))
             }
         }
     }
@@ -145,14 +163,30 @@ class EditorViewModel @Inject constructor(
             val f = s.form
             service.updateDetails(s.original.copy(name = f.name, instructions = f.instructions, purpose = f.purpose ?: s.original.purpose, purposeNote = f.purposeNote, colorTag = f.colorIndex ?: s.original.colorTag, foodRelation = f.foodRelation, side = f.side,
                 bodyLocation = f.bodyLocation.ifBlank { null }, dressingType = f.dressingType.ifBlank { null }, enabledSites = f.sites.ifEmpty { null }))
-        } else service.create(built())
+        } else if (s.replacing != null) service.replace(s.replacing.id, built(), confirmed = false, kind = s.replaceKind)
+        else service.create(built())
         when (result) {
             ActionResult.Done -> _s.update { it.copy(saved = true) }
             is ActionResult.Invalid -> _s.update { it.copy(errors = result.errors) }
             is ActionResult.Blocked -> _s.update { it.copy(errors = listOf(result.message)) }
-            is ActionResult.NeedsConfirmation -> _s.update { it.copy(errors = listOf(result.message)) }
+            is ActionResult.NeedsConfirmation -> _s.update { it.copy(confirm = result.message) }
         }
     }
+
+    /** Confirmed replacement of a must-complete course. */
+    fun confirmReplace() = viewModelScope.launch {
+        val s = _s.value
+        val old = s.replacing ?: return@launch
+        _s.update { it.copy(confirm = null) }
+        when (val r = service.replace(old.id, built(), confirmed = true, kind = s.replaceKind)) {
+            ActionResult.Done -> _s.update { it.copy(saved = true) }
+            is ActionResult.Invalid -> _s.update { it.copy(errors = r.errors) }
+            is ActionResult.Blocked -> _s.update { it.copy(errors = listOf(r.message)) }
+            is ActionResult.NeedsConfirmation -> _s.update { it.copy(errors = listOf(r.message)) }
+        }
+    }
+
+    fun dismissConfirm() = _s.update { it.copy(confirm = null) }
 }
 
 private val STEPS = listOf("Type", "Details", "Dose & schedule", "Course", "Review")
@@ -163,9 +197,14 @@ private val STEPS = listOf("Type", "Details", "Dose & schedule", "Course", "Revi
 fun EditorScreen(vm: EditorViewModel, onDone: () -> Unit) {
     val s by vm.state.collectAsState()
     LaunchedEffect(s.saved) { if (s.saved) onDone() }
+    s.confirm?.let { msg ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = vm::dismissConfirm, text = { Text(msg) },
+            confirmButton = { TextButton(onClick = vm::confirmReplace) { Text("Replace") } },
+            dismissButton = { TextButton(onClick = vm::dismissConfirm) { Text("Cancel") } })
+    }
     val editing = s.editingId != null
     Scaffold(topBar = {
-        TopAppBar(title = { Text(if (editing) "Edit details" else "Add medicine · ${STEPS[s.step]}") },
+        TopAppBar(title = { Text(if (editing) "Edit details" else if (s.replacing != null) "Replace ${s.replacing!!.name} · ${STEPS[s.step]}" else "Add medicine · ${STEPS[s.step]}") },
             navigationIcon = { TextButton(onClick = onDone) { Text("Cancel") } })
     }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -180,6 +219,14 @@ fun EditorScreen(vm: EditorViewModel, onDone: () -> Unit) {
                 2 -> DoseStep(s, vm)
                 3 -> CourseStep(s, vm)
                 else -> ReviewStep(vm.built())
+            }
+            if (s.replacing != null) {
+                SectionTitle("What kind of change?")
+                ChoiceChips(com.remedicord.domain.model.ReplaceKind.entries, s.replaceKind, Labels::replaceKind) { k -> vm.update { it.copy(replaceKind = k) } }
+            }
+            s.replacing?.let { old ->
+                Text("Saving adds this as a new medicine. ${old.name} stops today (reason: replaced), and the two are linked so you can move between them.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             s.errors.forEach { Text("• $it", color = MaterialTheme.colorScheme.error) }
             Spacer(Modifier.height(8.dp))

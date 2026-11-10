@@ -82,7 +82,7 @@ class ReminderPlanner(
         for (stored in allMeds) {
             // E7: a pause with an end date resumes by itself.
             val med = if (stored.status == MedicationStatus.PAUSED && stored.pausedUntil != null && nowMs >= stored.pausedUntil) {
-                stored.copy(status = MedicationStatus.ACTIVE, pausedUntil = null, pauseReason = null).also {
+                stored.copy(status = MedicationStatus.ACTIVE, pausedUntil = null, pauseReason = null, pausedAt = null).also {
                     meds.update(it, "Pause ended: resumed automatically")
                     Notifications.postGeneral(context, RESUMED_NOTIFICATION_BASE + stored.id.toInt(), "Reminders resumed", "${stored.name}: the pause has ended.")
                 }
@@ -122,7 +122,7 @@ class ReminderPlanner(
             val courseDone = required != null && CoursePolicy.progress(required, statuses).isComplete
             val allEnded = regimens.isNotEmpty() && regimens.all { it.effectiveTo != null && !it.effectiveTo.isAfter(now) }
             if (courseDone || allEnded) {
-                meds.update(med.copy(status = MedicationStatus.COMPLETED), if (courseDone) "Course completed" else "Schedule ended")
+                meds.update(med.copy(status = MedicationStatus.COMPLETED, stoppedAt = nowMs), if (courseDone) "Course completed" else "Schedule ended")
                 dao.deleteFutureAuto(med.id, nowMs)
                 continue
             }

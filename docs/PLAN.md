@@ -389,6 +389,13 @@ Every phase also requires **`gradlew verifyAll` to pass** (all automated tests +
 - **Done when:** `gradlew assembleRelease` produces a signed APK that installs and opens, and the merged manifest has no INTERNET.
 
 ### Progress log (2026-11-07)
+**v1.4.0 (2026-11-10):**
+- Change history on the medicine page (dose / quantity / schedule changes, detail edits, pause / resume / stop / restart / replacement), built from the audit trail
+- Replace a medicine (Upgrade / Downgrade / Switch): a new linked entry; the old one stops ("Upgraded to …"); links both ways on the list and detail pages
+- Medicines list shows dates per tab (started / target end; paused / resumes; start – end with outcome)
+- Fixed: course text squeezed into one letter per line on the medicine page
+- DB schema v4 (replacesId, replacedById, replacedAt, pausedAt, replaceKind) with tested 3→4 and 1→4 migrations
+
 **v1.3.0 (2026-11-10):**
 - "All taken" / "Skip all…" for a time-of-day section, with one Undo
 - Postpone the next 1–3 reminders (all medicines) by 1–12 hours; only the reminder moves, never past the medicine's next dose

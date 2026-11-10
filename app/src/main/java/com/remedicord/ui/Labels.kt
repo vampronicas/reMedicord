@@ -77,9 +77,22 @@ object Labels {
         com.remedicord.domain.model.PendingReason.APP_NOT_RUNNING, null -> "Due while reMedicord wasn't running"
     }
 
+    /** v1.4 replacement wording. */
+    fun replaceKind(k: com.remedicord.domain.model.ReplaceKind) = when (k) {
+        com.remedicord.domain.model.ReplaceKind.UPGRADE -> "Upgrade"; com.remedicord.domain.model.ReplaceKind.DOWNGRADE -> "Downgrade"
+        com.remedicord.domain.model.ReplaceKind.SWITCH -> "Switch to another medicine"
+    }
+    fun replacedTo(k: com.remedicord.domain.model.ReplaceKind?) = when (k) {
+        com.remedicord.domain.model.ReplaceKind.UPGRADE -> "Upgraded to"; com.remedicord.domain.model.ReplaceKind.DOWNGRADE -> "Downgraded to"; else -> "Replaced by"
+    }
+    fun replacedFrom(k: com.remedicord.domain.model.ReplaceKind?) = when (k) {
+        com.remedicord.domain.model.ReplaceKind.UPGRADE -> "Upgraded from"; com.remedicord.domain.model.ReplaceKind.DOWNGRADE -> "Downgraded from"; else -> "Replaces"
+    }
+
     fun stopReason(r: StopReason) = when (r) {
         StopReason.COURSE_COMPLETED -> "Course completed"; StopReason.SYMPTOMS_RESOLVED -> "Symptoms resolved"
         StopReason.DOCTOR_INSTRUCTED -> "Doctor instructed"; StopReason.SIDE_EFFECT -> "Side effect / reaction"; StopReason.OTHER -> "Other"
+        StopReason.REPLACED -> "Replaced by another medicine"
     }
 
     fun status(s: DoseStatus) = when (s) {

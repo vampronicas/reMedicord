@@ -90,6 +90,8 @@ object StopPolicy {
                 PolicyResult.NeedsConfirmation("Confirm your doctor told you to stop this course. Please add a note.")
             StopReason.SIDE_EFFECT ->
                 PolicyResult.NeedsConfirmation("Stop because of a side effect or reaction? Contact your doctor. Please add a note.")
+            StopReason.REPLACED ->
+                PolicyResult.NeedsConfirmation("Only replace a must-complete course when your doctor tells you to. The new medicine continues from today.")
         }
     }
 

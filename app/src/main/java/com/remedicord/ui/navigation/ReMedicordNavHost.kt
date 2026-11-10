@@ -51,7 +51,7 @@ import kotlinx.serialization.Serializable
 @Serializable object MedicationsRoute
 @Serializable object HistoryRoute
 @Serializable object SettingsRoute
-@Serializable data class EditorRoute(val id: Long = 0)
+@Serializable data class EditorRoute(val id: Long = 0, val replaces: Long = 0)
 @Serializable data class DetailRoute(val id: Long)
 @Serializable object HealthRoute
 @Serializable object ReviewRoute
@@ -130,7 +130,10 @@ private fun MainApp() {
                 composable<HealthRoute> { HealthScreen(hiltViewModel()) }
                 composable<BackupRoute> { BackupScreen(hiltViewModel()) }
                 composable<EditorRoute> { EditorScreen(hiltViewModel(), onDone = { nav.popBackStack() }) }
-                composable<DetailRoute> { DetailScreen(hiltViewModel(), onBack = { nav.popBackStack() }, onEdit = { nav.navigate(EditorRoute(it)) }) }
+                composable<DetailRoute> {
+                    DetailScreen(hiltViewModel(), onBack = { nav.popBackStack() }, onEdit = { nav.navigate(EditorRoute(it)) },
+                        onOpenMedication = { nav.navigate(DetailRoute(it)) }, onReplace = { nav.navigate(EditorRoute(replaces = it)) })
+                }
             }
         }
     }

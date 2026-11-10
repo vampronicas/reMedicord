@@ -32,9 +32,24 @@ class MigrationTest {
         }
     }
 
-    @Test fun version1To3InOneGo() {
-        helper.createDatabase("m13.db", 1).close()
-        helper.runMigrationsAndValidate("m13.db", 3, true, *AppDatabase.MIGRATIONS).close()
+    @Test fun version1To4InOneGo() {
+        helper.createDatabase("m14.db", 1).close()
+        helper.runMigrationsAndValidate("m14.db", 4, true, *AppDatabase.MIGRATIONS).close()
+    }
+
+    @Test fun version3To4AddsReplacementLinksAndKeepsData() {
+        helper.createDatabase("m34.db", 3).use { db ->
+            db.execSQL(
+                """INSERT INTO medication (id, name, type, instructions, foodRelation, status, mustComplete, courseMode, timeZoneMode, createdAt, updatedAt, purpose, purposeNote)
+                   VALUES (1, 'Timolol', 'EYE_DROP', '', 'NONE', 'ACTIVE', 0, 'NONE', 'LOCAL', 1, 1, 'LONG_TERM', '')""",
+            )
+        }
+        helper.runMigrationsAndValidate("m34.db", 4, true, *AppDatabase.MIGRATIONS).use { db ->
+            db.query("SELECT name, replacesId, replacedById, replacedAt, pausedAt, replaceKind FROM medication WHERE id = 1").use { c ->
+                c.moveToFirst()
+                assertEquals("Timolol", c.getString(0)); (1..5).forEach { i -> assertEquals(true, c.isNull(i)) }
+            }
+        }
     }
 
     @Test fun version1To2KeepsDataAndAddsColumns() {

@@ -23,7 +23,7 @@ enum class BodySide { LEFT, RIGHT, BOTH }
 enum class CourseMode { NONE, DAYS, DOSES }
 
 @Serializable
-enum class StopReason { COURSE_COMPLETED, SYMPTOMS_RESOLVED, DOCTOR_INSTRUCTED, SIDE_EFFECT, OTHER }
+enum class StopReason { COURSE_COMPLETED, SYMPTOMS_RESOLVED, DOCTOR_INSTRUCTED, SIDE_EFFECT, OTHER, REPLACED }
 
 @Serializable
 enum class DoseUnit { TABLET, CAPSULE, ML, DROP, UNIT, MG, PUFF, SPRAY, APPLICATION, PATCH, DRESSING }
@@ -56,3 +56,7 @@ enum class TimeZoneMode { LOCAL, HOME }
 
 @Serializable
 enum class AuditAction { CREATE, UPDATE, DELETE }
+
+/** v1.4: how a replacement relates to the medicine it replaces. */
+@Serializable
+enum class ReplaceKind { UPGRADE, DOWNGRADE, SWITCH }

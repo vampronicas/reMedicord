@@ -53,6 +53,45 @@ class MedicationService(
     suspend fun create(form: MedicationForm): ActionResult {
         val errors = FormValidator.validate(form)
         if (errors.isNotEmpty()) return ActionResult.Invalid(errors)
+        insert(form)
+        replanner.replan()
+        return ActionResult.Done
+    }
+
+    /**
+     * v1.4: replace a medicine with a new one (another strength, brand or drug). The new medicine is a NEW entry
+     * linked to the old one; the old one stops now with reason REPLACED. A must-complete course needs confirmation.
+     * Returns Done, or Invalid / NeedsConfirmation; [onCreated] receives the new id.
+     */
+    suspend fun replace(
+        oldId: Long, form: MedicationForm, confirmed: Boolean,
+        kind: com.remedicord.domain.model.ReplaceKind = com.remedicord.domain.model.ReplaceKind.SWITCH, onCreated: (Long) -> Unit = {},
+    ): ActionResult {
+        val old = meds.get(oldId) ?: return ActionResult.Invalid(listOf("Medication not found"))
+        if (old.status == MedicationStatus.STOPPED || old.status == MedicationStatus.COMPLETED) {
+            return ActionResult.Invalid(listOf("This medicine has already ended. Add the new medicine instead."))
+        }
+        val errors = FormValidator.validate(form)
+        if (errors.isNotEmpty()) return ActionResult.Invalid(errors)
+        val policy = StopPolicy.canStop(old.courseInfo(), StopReason.REPLACED, courseComplete = false)
+        if (policy is PolicyResult.Blocked) return ActionResult.Blocked(policy.message)
+        if (policy is PolicyResult.NeedsConfirmation && !confirmed) return ActionResult.NeedsConfirmation(policy.message)
+        val now = time.nowMillis()
+        val newId = insert(form, replacesId = oldId, replaceKind = kind)
+        val note = when (kind) {
+            com.remedicord.domain.model.ReplaceKind.UPGRADE -> "Upgraded to"; com.remedicord.domain.model.ReplaceKind.DOWNGRADE -> "Downgraded to"
+            com.remedicord.domain.model.ReplaceKind.SWITCH -> "Replaced by"
+        } + " " + form.name.trim()
+        meds.update(old.copy(status = MedicationStatus.STOPPED, stopReason = StopReason.REPLACED, stopNote = note,
+            stoppedAt = now, replacedById = newId, replacedAt = now, pausedUntil = null, pauseReason = null, pausedAt = null), note)
+        meds.activeRegimen(oldId, now)?.let { meds.changeRegimenEnd(it, now, "Replaced") }
+        doses.deleteFuturePlanned(oldId, now)
+        replanner.replan()
+        onCreated(newId)
+        return ActionResult.Done
+    }
+
+    private suspend fun insert(form: MedicationForm, replacesId: Long? = null, replaceKind: com.remedicord.domain.model.ReplaceKind? = null): Long {
         val zone = time.zone()
         val now = time.nowMillis()
         val startInstant = maxOf(DoseGenerator.resolve(form.startDate.atStartOfDay(), zone).toEpochMilli(), now)
@@ -65,10 +104,10 @@ class MedicationService(
             enabledSites = form.sites.map(String::trim).ifEmpty { null },
             timeZoneMode = form.timeZoneMode, homeZone = if (form.timeZoneMode == TimeZoneMode.HOME) zone.id else null,
             mustComplete = form.mustComplete, courseMode = form.courseMode, courseLength = form.courseLength,
-            courseStartEpochDay = form.startDate.toEpochDay(), createdAt = now, updatedAt = now,
+            courseStartEpochDay = form.startDate.toEpochDay(), createdAt = now, updatedAt = now, replacesId = replacesId, replaceKind = replaceKind,
         )
-        if (form.taperSteps.isEmpty()) {
-            meds.create(med, regimenEntity(0, startInstant, null, form.rule!!, form.amount, form.unit, "Initial"))
+        return if (form.taperSteps.isEmpty()) {
+            meds.create(med, regimenEntity(0, startInstant, null, form.rule!!, form.amount, form.unit, if (replacesId != null) "Initial (replacement)" else "Initial"))
         } else {
             val planned = TaperBuilder.build(form.taperSteps, form.startDate, zone)
             val first = planned.first()
@@ -76,9 +115,8 @@ class MedicationService(
             planned.drop(1).forEachIndexed { i, p ->
                 meds.changeRegimen(regimenEntity(id, p.effectiveFrom.toEpochMilli(), p.effectiveTo.toEpochMilli(), p.rule, p.amount, p.unit, "Taper step ${i + 2}"))
             }
+            id
         }
-        replanner.replan()
-        return ActionResult.Done
     }
 
     suspend fun updateDetails(updated: MedicationEntity): ActionResult {
@@ -139,7 +177,8 @@ class MedicationService(
         if (untilDate != null && untilDate.isBefore(today)) return ActionResult.Invalid(listOf("Choose today or a later date"))
         if (reason != null && (reason.length > 200 || !FormValidator.cleanText(reason))) return ActionResult.Invalid(listOf("Reason is too long"))
         val until = untilDate?.let { DoseGenerator.resolve(it.plusDays(1).atStartOfDay(), time.zone()).toEpochMilli() }
-        meds.update(med.copy(status = MedicationStatus.PAUSED, pausedUntil = until, pauseReason = reason?.trim()?.ifBlank { null }),
+        meds.update(med.copy(status = MedicationStatus.PAUSED, pausedUntil = until, pauseReason = reason?.trim()?.ifBlank { null },
+            pausedAt = if (med.status == MedicationStatus.PAUSED) med.pausedAt ?: time.nowMillis() else time.nowMillis()),
             if (untilDate == null) "Paused until resumed" else "Paused until $untilDate")
         doses.deleteFuturePlanned(medicationId, time.nowMillis())
         replanner.replan()
@@ -148,7 +187,7 @@ class MedicationService(
 
     suspend fun resume(medicationId: Long): ActionResult {
         val med = meds.get(medicationId) ?: return ActionResult.Invalid(listOf("Medication not found"))
-        meds.update(med.copy(status = MedicationStatus.ACTIVE, pausedUntil = null, pauseReason = null), "Resumed")
+        meds.update(med.copy(status = MedicationStatus.ACTIVE, pausedUntil = null, pauseReason = null, pausedAt = null), "Resumed")
         replanner.replan()
         return ActionResult.Done
     }

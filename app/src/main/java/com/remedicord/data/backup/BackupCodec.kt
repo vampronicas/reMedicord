@@ -229,6 +229,8 @@ object BackupCodec {
             md.homeZone?.let { z -> if (runCatching { ZoneId.of(z) }.isFailure) fail("time zone") }
             md.courseLength?.let { if (it !in 1..1000) fail("course length") }
             md.colorTag?.let { if (it !in 0..7) fail("colour") }
+            if (md.replacesId != null && md.replacesId !in medIds) fail("replacement link")
+            if (md.replacedById != null && md.replacedById !in medIds) fail("replacement link")
             md.pauseReason?.let { text(it, 200, "pause reason") }
         }
         s.regimens.forEach { r ->

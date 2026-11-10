@@ -60,6 +60,10 @@ class MedicationRepository(
      */
     suspend fun delete(id: Long) = db.withTransaction {
         val med = medications.get(id) ?: return@withTransaction
+        // v1.4: clear replacement links that point to this medicine.
+        medications.getAll().filter { it.replacesId == id || it.replacedById == id }.forEach {
+            medications.update(it.copy(replacesId = it.replacesId.takeIf { r -> r != id }, replacedById = it.replacedById.takeIf { r -> r != id }))
+        }
         medications.deleteById(id)
         audit.record(AuditLogger.MEDICATION, id, AuditAction.DELETE, MedicationEntity.serializer(), null, null, "Medicine deleted: ${med.name}")
     }

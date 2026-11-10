@@ -171,3 +171,11 @@ Then:
 - **E11 Reminder sound:** 3 gentle tones made for the app (Gentle chime, Soft beep, Calm bell; quiet and short), phone default, or silent; with a preview. Android fixes a channel's sound, so each choice creates a fresh reminder channel.
 - **E12** "Danger zone" heading renamed **"Added by mistake?"**.
 - **E13** Medicine reason details are **optional**; the category stays required.
+
+---
+
+## v1.4.0 batch (requested and built 2026-11-10) ✅
+- **E14 Change history:** readable timeline on the medicine page (dose, quantity and schedule changes, detail edits, pause / resume / stop / restart / replacement), built from the existing audit trail.
+- **E15 Replace a medicine:** Upgrade / Downgrade / Switch. Creates a new linked entry; the old one stops with "Upgraded to …" (etc.). Tappable links both ways on the medicine pages and in the list. Replacing a must-complete course asks for confirmation.
+- **E16 Dates in the medicines list:** Active "Started … · target end …", Paused "paused … · resumes …" or "until you resume", Finished "start – end · outcome".
+- **Fix:** the course line on the medicine page was squeezed into one letter per line; it now stacks.

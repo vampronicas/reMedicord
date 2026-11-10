@@ -28,6 +28,7 @@ A private, offline Android app for tracking medicines: pills, liquids, eye and e
 - Calendar history with a per-medicine day summary, a compact medicine filter, and adherence %.
 - "All taken" / "Skip all" for a whole morning (or any section), with Undo. Postpone the next 1–3 reminders by a few hours.
 - Gentle reminder sounds made for the app (chime, soft beep, bell), or phone default or silent.
+- Change history per medicine. Upgrade, downgrade or switch a medicine; the old and new entries stay linked. Dates shown in the medicines list.
 
 ## Install (sideload)
 See [docs/INSTALL.md](docs/INSTALL.md). Requires Android 12 or newer.
