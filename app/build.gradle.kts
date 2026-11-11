@@ -53,8 +53,8 @@ android {
         applicationId = "com.remedicord"
         minSdk = 31
         targetSdk = 37
-        versionCode = 6
-        versionName = "1.4.1"
+        versionCode = 7
+        versionName = "1.4.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -143,6 +143,17 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    // Build-time security fix (not shipped in the app): the code generators above still pull in a Guava version
+    // with advisory GHSA-xxph-c9ww-hj94 (OSV scan, 2026-11-11). Remove once Hilt/Room ship the fixed version.
+    constraints { ksp("com.google.guava:guava:33.7.2-jre") }
+    // Same for the lint tool AGP downloads separately (GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-wg6q-6289-32hp,
+    // GHSA-xxph-c9ww-hj94, GHSA-j288-q9x7-2f5v, GHSA-7r82-7xv7-xcpj). Versions match the root build.gradle.kts fixes.
+    constraints {
+        listOf(
+            "org.bouncycastle:bcprov-jdk18on:1.86", "org.bouncycastle:bcpkix-jdk18on:1.86", "org.bouncycastle:bcutil-jdk18on:1.86",
+            "com.google.guava:guava:33.7.2-jre", "org.apache.commons:commons-lang3:3.21.0", "org.apache.httpcomponents:httpclient:4.5.14",
+        ).forEach { add("androidLintTool", it) }
+    }
     implementation(libs.androidx.sqlite)
     implementation(libs.sqlcipher.android)
     implementation(libs.kotlinx.coroutines.android)

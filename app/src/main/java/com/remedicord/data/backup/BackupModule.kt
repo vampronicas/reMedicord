@@ -20,6 +20,6 @@ object BackupModule {
         @ApplicationContext c: Context, db: AppDatabase, settings: SettingsRepository, replanner: Replanner, time: TimeProvider,
         lock: com.remedicord.core.lock.AppLockManager,
     ) = BackupService(c, db, settings, replanner, time, c.packageManager.getPackageInfo(c.packageName, 0).versionName ?: "?") {
-        settings.get(com.remedicord.core.lock.AppLockManager.SETTING_TIMEOUT_MIN)?.toLongOrNull()?.let { lock.timeoutMs = it * 60_000 }
+        lock.applyTimeoutSetting(settings.get(com.remedicord.core.lock.AppLockManager.SETTING_TIMEOUT_MIN))
     }
 }

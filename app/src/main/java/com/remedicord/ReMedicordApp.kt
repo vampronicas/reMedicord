@@ -28,7 +28,7 @@ class ReMedicordApp : Application() {
         if (getSystemService(UserManager::class.java).isUserUnlocked) {
             appScope.launch {
                 runCatching {
-                    settings.get().get(AppLockManager.SETTING_TIMEOUT_MIN)?.toLongOrNull()?.let { lockManager.timeoutMs = it * 60_000 }
+                    lockManager.applyTimeoutSetting(settings.get().get(AppLockManager.SETTING_TIMEOUT_MIN))
                     planner.get().replan()
                 }
             }

@@ -112,8 +112,63 @@ class BackupCodecTest {
         rejects(withFile(BackupCodec.MEDICATIONS, String(files().getValue(BackupCodec.MEDICATIONS)).replace("EYE_DROP", "ROOTKIT")), "invalid")
     }
 
+    /** Same number of settings as the manifest says, so only the key/value check can reject it. */
+    private fun withSettings(from: String, to: String): ByteArray {
+        val s = String(files().getValue(BackupCodec.SETTINGS))
+        assertTrue("fixture must contain $from", s.contains(from))
+        return withFile(BackupCodec.SETTINGS, s.replace(from, to))
+    }
+
     @Test fun privateSettingsCantBeSmuggledIn() {
-        rejects(withFile(BackupCodec.SETTINGS, """[{"key":"private.pin.hash","value":"x"}]"""), "invalid")
+        rejects(withSettings("\"key\":\"reminder.sound\",\"value\":\"BELL\"", "\"key\":\"private.pin.hash\",\"value\":\"x\""), "setting key")
+        rejects(withSettings("\"key\":\"reminder.sound\"", "\"key\":\"planner.plannedUntil\""), "setting key")
+    }
+
+    @Test fun unknownSettingsAndOutOfRangeValuesAreRejected() {
+        rejects(withSettings("\"key\":\"reminder.sound\"", "\"key\":\"reminder.somethingNew\""), "setting key")
+        // A crafted backup must not be able to switch off the app lock (huge timeout) or break reminders.
+        rejects(withSettings("\"key\":\"lock.timeoutMinutes\",\"value\":\"5\"", "\"key\":\"lock.timeoutMinutes\",\"value\":\"99999999\""), "setting value")
+        rejects(withSettings("\"key\":\"lock.timeoutMinutes\",\"value\":\"5\"", "\"key\":\"lock.timeoutMinutes\",\"value\":\"-1\""), "setting value")
+        rejects(withSettings("\"value\":\"10\"", "\"value\":\"0\""), "setting value") // snooze 0 min
+        rejects(withSettings("\"value\":\"BELL\"", "\"value\":\"../../evil\""), "setting value")
+        rejects(withSettings("\"value\":\"14\"", "\"value\":\"3650\""), "setting value")
+    }
+
+    @Test fun everyOfferedSettingChoiceIsAccepted() {
+        listOf(0, 1, 5, 15).forEach { assertTrue(BackupCodec.isValidSetting("lock.timeoutMinutes", "$it")) }
+        listOf(0, 7, 14, 30).forEach { assertTrue(BackupCodec.isValidSetting("backup.reminderDays", "$it")) }
+        listOf(5, 10, 15, 30).forEach { assertTrue(BackupCodec.isValidSetting("reminder.snoozeMinutes", "$it")) }
+        listOf(1, 2, 3, 5).forEach { assertTrue(BackupCodec.isValidSetting("reminder.maxSnoozes", "$it")); assertTrue(BackupCodec.isValidSetting("reminder.maxRepeats", "$it")) }
+        listOf(5, 10, 15).forEach { assertTrue(BackupCodec.isValidSetting("reminder.repeatMinutes", "$it")) }
+        listOf(3, 5, 10).forEach { assertTrue(BackupCodec.isValidSetting("reminder.eyeDropGapMinutes", "$it")) }
+        listOf("true", "false").forEach { assertTrue(BackupCodec.isValidSetting("reminder.fullScreen", it)) }
+        listOf("CHIME", "BEEP", "BELL", "DEFAULT", "SILENT").forEach { assertTrue(BackupCodec.isValidSetting("reminder.sound", it)) }
+        assertFalse(BackupCodec.isValidSetting("reminder.fullScreen", "yes"))
+        assertFalse(BackupCodec.isValidSetting("lock.timeoutMinutes", "2"))
+    }
+
+    @Test fun invalidSettingValuesAreNotExported() {
+        val bad = snap.copy(settings = snap.settings + SettingEntity("reminder.repeatMinutes", "abc"))
+        val (_, s) = roundTrip(zip(files(bad)))
+        assertFalse(s.settings.any { it.key == "reminder.repeatMinutes" })
+    }
+
+    @Test fun changeHistoryTextIsCheckedLikeEveryOtherField() {
+        val audit = String(files().getValue(BackupCodec.AUDIT))
+        assertTrue(audit.contains("\"afterJson\":\"{}\""))
+        // A medicine name hidden inside the change history, disguised with a right-to-left override (U+202E).
+        rejects(withFile(BackupCodec.AUDIT, audit.replace("\"afterJson\":\"{}\"", """"afterJson":"{\"name\":\"\\u202eevil\"}"""")), "audit details")
+        rejects(withFile(BackupCodec.AUDIT, audit.replace("\"afterJson\":\"{}\"", """"afterJson":"{\"bad\\u0007key\":1}"""")), "audit details")
+        rejects(withFile(BackupCodec.AUDIT, audit.replace("\"afterJson\":\"{}\"", "\"afterJson\":\"not json\"")), "audit details")
+        // Absurdly deep nesting is refused cleanly (a normal "invalid backup" message, never a crash).
+        val deep = "[".repeat(20_000) + "]".repeat(20_000)
+        rejects(withFile(BackupCodec.AUDIT, audit.replace("\"afterJson\":\"{}\"", "\"afterJson\":\"$deep\"")), "audit details")
+        // Ordinary nesting is fine.
+        val nested = "[".repeat(50) + "]".repeat(50)
+        val (_, ok) = roundTrip(withFile(BackupCodec.AUDIT, audit.replace("\"afterJson\":\"{}\"", "\"afterJson\":\"$nested\"")))
+        assertEquals(1, ok.audit.size)
+        // Normal text with line breaks is fine.
+        roundTrip(withFile(BackupCodec.AUDIT, audit.replace("\"afterJson\":\"{}\"", """"afterJson":"{\"note\":\"line 1\\nline 2\"}"""")))
     }
 
     @Test fun rowValidation() {
