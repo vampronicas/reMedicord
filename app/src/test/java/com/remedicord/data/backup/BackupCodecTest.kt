@@ -28,7 +28,8 @@ import org.junit.Test
 class BackupCodecTest {
     private val rule = ScheduleRule.toJson(ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0))))
     private val snap = BackupSnapshot(
-        settings = listOf(SettingEntity("reminder.snoozeMinutes", "10"), SettingEntity("private.pin.hash", "SECRET"), SettingEntity("planner.plannedUntil", "1")),
+        settings = listOf(SettingEntity("reminder.snoozeMinutes", "10"), SettingEntity("private.pin.hash", "SECRET"), SettingEntity("planner.plannedUntil", "1"),
+            SettingEntity("reminder.sound", "BELL"), SettingEntity("lock.timeoutMinutes", "5"), SettingEntity("backup.reminderDays", "14"), SettingEntity("backup.lastAt", "99")),
         medications = listOf(MedicationEntity(id = 1, name = "=HYPERLINK(\"evil\")", type = MedicationType.EYE_DROP, enabledSites = listOf("a"), createdAt = 1, updatedAt = 1)),
         regimens = listOf(RegimenEntity(id = 1, medicationId = 1, effectiveFrom = 0, doseAmount = BigDecimal("2.5"), doseUnit = DoseUnit.DROP, scheduleRuleJson = rule, changeReason = "Initial", createdAt = 0)),
         doses = listOf(DoseEventEntity(id = 1, medicationId = 1, regimenId = 1, scheduledAt = 1_000, status = DoseStatus.TAKEN, takenAt = 1_000, note = "+1 \"quoted\"", createdAt = 0, updatedAt = 0)),
@@ -56,7 +57,8 @@ class BackupCodecTest {
     @Test fun roundTripIsLosslessAndExcludesDeviceSettings() {
         val (m, s) = roundTrip(zip(files()))
         assertEquals(123L, m.exportedAt)
-        assertEquals(listOf("reminder.snoozeMinutes"), s.settings.map { it.key })
+        // App settings travel with the backup; PIN, planner state and backup bookkeeping stay on the phone.
+        assertEquals(listOf("reminder.snoozeMinutes", "reminder.sound", "lock.timeoutMinutes", "backup.reminderDays"), s.settings.map { it.key })
         assertEquals(snap.medications, s.medications); assertEquals(snap.regimens, s.regimens); assertEquals(snap.doses, s.doses)
         assertEquals(snap.skipRules, s.skipRules); assertEquals(snap.audit, s.audit)
         assertFalse(String(zip(files())).contains("SECRET"))

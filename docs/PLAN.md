@@ -389,6 +389,12 @@ Every phase also requires **`gradlew verifyAll` to pass** (all automated tests +
 - **Done when:** `gradlew assembleRelease` produces a signed APK that installs and opens, and the merged manifest has no INTERNET.
 
 ### Progress log (2026-11-07)
+**v1.4.1 (2026-11-11):** fixes:
+- jumping between linked (upgraded / replaced) medicine pages no longer stacks copies of the same pages
+- delete confirmation asks for the word "Delete"
+- "filled in later" removed from cards (shown as "recorded afterwards" in the record panel only)
+- backups now include all app settings: reminder sound and backup-reminder interval were missing; sound and lock timeout take effect right after a restore (PIN, permissions and backup dates stay on the phone)
+
 **v1.4.0 (2026-11-10):**
 - Change history on the medicine page (dose / quantity / schedule changes, detail edits, pause / resume / stop / restart / replacement), built from the audit trail
 - Replace a medicine (Upgrade / Downgrade / Switch): a new linked entry; the old one stops ("Upgraded to …"); links both ways on the list and detail pages

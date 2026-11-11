@@ -146,14 +146,14 @@ fun DeleteDialog(info: MedicationService.DeleteInfo, onCancel: () -> Unit, onDel
         )
         return
     }
-    val matches = typed.trim().equals(info.name.trim(), ignoreCase = true)
+    val matches = typed.trim().equals(MedicationService.DELETE_WORD, ignoreCase = true)
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Delete ${info.name}?") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("This removes the medicine and its ${info.doseRecords} dose record${if (info.doseRecords == 1) "" else "s"}. It can't be undone here.")
-                OutlinedTextField(typed, { if (it.length <= 80) typed = it }, label = { Text("Type \"${info.name}\" to confirm") }, singleLine = true)
+                OutlinedTextField(typed, { if (it.length <= 20) typed = it }, label = { Text("Type \"${MedicationService.DELETE_WORD}\" to confirm") }, singleLine = true)
                 Text("A snapshot is saved first, so you can undo this from Backup & restore.", style = MaterialTheme.typography.bodySmall)
             }
         },

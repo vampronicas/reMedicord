@@ -205,7 +205,7 @@ interface AuditLogDao {
 @Dao
 interface SettingDao {
     /** Removes user settings but keeps this phone's private/device keys (PIN, planner state). */
-    @Query("DELETE FROM setting WHERE `key` NOT LIKE 'private.%' AND `key` NOT LIKE 'planner.%' AND `key` NOT LIKE 'onboarding.%' AND `key` NOT LIKE 'backup.%'")
+    @Query("DELETE FROM setting WHERE `key` NOT LIKE 'private.%' AND `key` NOT LIKE 'planner.%' AND `key` NOT LIKE 'onboarding.%' AND `key` NOT IN ('backup.lastAt', 'backup.lastRemindedAt', 'backup.firstSeenAt')")
     suspend fun deleteExportable()
 
     @Upsert

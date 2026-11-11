@@ -55,7 +55,7 @@ class RecordSupport @Inject constructor(
         val where = m.side?.let { Labels.side(it) + if (m.type == MedicationType.EYE_DROP) " eye" else if (m.type == MedicationType.EAR_DROP) " ear" else "" }
             ?: d.site ?: m.bodyLocation
         val status = when (d.status) {
-            DoseStatus.TAKEN -> "Taken" + (d.takenAt?.let { " " + Labels.time(Instant.ofEpochMilli(it), zone) } ?: "") + if (d.isLateLog) " · filled in later" else ""
+            DoseStatus.TAKEN -> "Taken" + (d.takenAt?.let { " " + Labels.time(Instant.ofEpochMilli(it), zone) } ?: "")
             DoseStatus.UNCONFIRMED -> "Needs your answer · " + Labels.pending(d.pendingReason).replaceFirstChar { it.lowercase() }
             DoseStatus.SKIPPED -> "Skipped" + (d.skipReason?.let { " · $it" } ?: "")
             DoseStatus.MISSED -> "Missed" + (d.skipReason?.let { " · $it" } ?: "")
@@ -76,7 +76,7 @@ class RecordSupport @Inject constructor(
         val sites = if (item.med.type == MedicationType.INJECTION || item.med.type == MedicationType.PATCH) item.med.enabledSites.orEmpty() else emptyList()
         return RecordSheetModel(
             title = item.med.name,
-            subtitle = listOfNotNull(item.regimen?.let { Labels.dose(it.doseAmount, it.doseUnit) }, "due " + Labels.time(dueAt(d), zone), Labels.date(dueAt(d), zone)).joinToString(" · "),
+            subtitle = listOfNotNull(item.regimen?.let { Labels.dose(it.doseAmount, it.doseUnit) }, "due " + Labels.time(dueAt(d), zone), Labels.date(dueAt(d), zone), "recorded afterwards".takeIf { d.isLateLog && d.status == DoseStatus.TAKEN }).joinToString(" · "),
             type = item.med.type, colorIndex = item.med.colorTag, current = d.status,
             takenTime = d.takenAt?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalTime().withSecond(0).withNano(0) },
             skipReason = d.skipReason, site = d.site ?: if (sites.isNotEmpty() && upcoming) actions.suggestSite(item.med.id) else null,

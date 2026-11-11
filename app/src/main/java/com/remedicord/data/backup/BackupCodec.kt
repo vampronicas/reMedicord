@@ -71,14 +71,16 @@ object BackupCodec {
     val ALLOWED = setOf(MANIFEST) + DATA_FILES
 
     /** Settings that describe this phone, not the user's data: never exported, never imported. */
-    private val DEVICE_PREFIXES = listOf("private.", "planner.", "onboarding.", "backup.")
+    private val DEVICE_PREFIXES = listOf("private.", "planner.", "onboarding.")
+    /** Backup bookkeeping that belongs to this phone (the reminder interval itself IS exported). */
+    private val DEVICE_KEYS = setOf("backup.lastAt", "backup.lastRemindedAt", "backup.firstSeenAt")
 
     data class Limits(val maxEntryBytes: Long = 100L * 1024 * 1024, val maxTotalBytes: Long = 250L * 1024 * 1024, val maxRows: Int = 1_000_000)
 
     private val json = Json { encodeDefaults = true; prettyPrint = false }
     private val strict = Json { ignoreUnknownKeys = false; isLenient = false; encodeDefaults = true }
 
-    fun isExportableSetting(key: String) = DEVICE_PREFIXES.none { key.startsWith(it) }
+    fun isExportableSetting(key: String) = DEVICE_PREFIXES.none { key.startsWith(it) } && key !in DEVICE_KEYS
 
     // ---------------------------------------------------------------- export
 

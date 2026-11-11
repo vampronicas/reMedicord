@@ -110,6 +110,8 @@ fun BackupScreen(vm: BackupViewModel) {
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle("Backup")
         Text("Last backup: " + (s.lastBackup?.let { Labels.dateTime(it) } ?: "never"))
+        Text("Includes all medicines, history and your app settings (reminder options, sound, lock timeout, backup reminder). Not included: your PIN and this phone's permissions.",
+            style = MaterialTheme.typography.bodySmall)
         Text("The backup file is NOT encrypted. Anyone who gets the file can read your medicine history. Keep it somewhere safe. Your PIN is never included.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         Button(enabled = !s.busy, onClick = {

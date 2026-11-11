@@ -74,6 +74,23 @@ class BackupServiceTest {
         assertEquals(1, backup.snapshots().size) // current data was saved first
     }
 
+    @Test fun appSettingsIncludingSoundAndLockTravelWithTheBackup() = runTest {
+        com.remedicord.reminders.Notifications.setReminderSound(context, com.remedicord.reminders.Notifications.ReminderSound.BELL)
+        settings.put("lock.timeoutMinutes", "5")
+        settings.put(BackupService.REMINDER_DAYS, "14")
+        settings.put("reminder.snoozeMinutes", "15")
+        val bytes = ByteArrayOutputStream().also { backup.export(it) }.toByteArray()
+        // Change everything on "the new phone".
+        com.remedicord.reminders.Notifications.setReminderSound(context, com.remedicord.reminders.Notifications.ReminderSound.BEEP)
+        settings.put("lock.timeoutMinutes", "0"); settings.put(BackupService.REMINDER_DAYS, "30"); settings.put("reminder.snoozeMinutes", "5")
+        backup.restore(ByteArrayInputStream(bytes))
+        assertEquals(com.remedicord.reminders.Notifications.ReminderSound.BELL, com.remedicord.reminders.Notifications.currentSound(context))
+        assertEquals("5", settings.get("lock.timeoutMinutes"))
+        assertEquals("14", settings.get(BackupService.REMINDER_DAYS))
+        assertEquals("15", settings.get("reminder.snoozeMinutes"))
+        com.remedicord.reminders.Notifications.setReminderSound(context, com.remedicord.reminders.Notifications.ReminderSound.CHIME)
+    }
+
     @Test fun invalidFileChangesNothing() = runTest {
         service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Keep me", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0)))))
         val before = all()

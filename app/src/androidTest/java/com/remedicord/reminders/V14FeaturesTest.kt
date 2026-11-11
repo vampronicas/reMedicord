@@ -96,7 +96,7 @@ class V14FeaturesTest {
         val oldId = id("Old")
         var newId = -1L
         service.replace(oldId, form("New"), confirmed = false) { newId = it }
-        assertEquals(ActionResult.Done, service.delete(newId, "New", warningAcknowledged = true))
+        assertEquals(ActionResult.Done, service.delete(newId, "Delete", warningAcknowledged = true))
         assertNull(db.medicationDao().get(oldId)!!.replacedById)
     }
 
