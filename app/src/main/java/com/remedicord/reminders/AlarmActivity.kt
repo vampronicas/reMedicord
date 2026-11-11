@@ -79,9 +79,6 @@ class AlarmViewModel @Inject constructor(
         }
     }
 
-    /** Forgets the loaded medicine details (the phone was locked again). */
-    fun hideDetails() { _items.value = null }
-
     private fun act(block: suspend () -> Unit) = viewModelScope.launch { block(); engine.get().refreshNotification(slotId); load() }
 
     fun take(id: Long) = act { actions.get().take(id, time.now(), eyeDropGapMinutes = settings.get().load().eyeDropGapMinutes) }
@@ -106,9 +103,6 @@ class AlarmViewModel @Inject constructor(
 class AlarmActivity : ComponentActivity() {
     private val vm: AlarmViewModel by viewModels()
     private var locked by mutableStateOf(true)
-    private val km by lazy { getSystemService(KeyguardManager::class.java) }
-    private fun userUnlocked() = getSystemService(UserManager::class.java).isUserUnlocked
-    private fun phoneLocked() = km.isKeyguardLocked || !userUnlocked()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,12 +112,14 @@ class AlarmActivity : ComponentActivity() {
         val slot = intent.getLongExtra(AlarmScheduler.EXTRA_SLOT, -1)
         if (!validSlot(slot)) { finish(); return }
         vm.slotId = slot
-        locked = phoneLocked()
+        val km = getSystemService(KeyguardManager::class.java)
+        val userUnlocked = getSystemService(UserManager::class.java).isUserUnlocked
+        locked = km.isKeyguardLocked || !userUnlocked
         if (!locked) vm.load()
         setContent {
             ReMedicordTheme {
                 AlarmScreen(
-                    vm = vm, locked = locked, canActLocked = userUnlocked(),
+                    vm = vm, locked = locked, canActLocked = userUnlocked,
                     onUnlock = {
                         km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
                             override fun onDismissSucceeded() { locked = false; vm.load() }
@@ -133,26 +129,6 @@ class AlarmActivity : ComponentActivity() {
                 )
             }
         }
-    }
-
-    /**
-     * The screen can stay open while the phone locks (it is allowed over the lock screen). When it comes back
-     * on top of the lock screen, hide the medicine details and choices again until the phone is unlocked (PLAN.md A2).
-     */
-    override fun onStart() {
-        super.onStart()
-        if (!locked && phoneLocked()) { locked = true; vm.hideDetails() }
-    }
-
-    /** A newer reminder arrived while this screen was open (single instance): show that one. */
-    override fun onNewIntent(intent: android.content.Intent) {
-        super.onNewIntent(intent)
-        val slot = intent.getLongExtra(AlarmScheduler.EXTRA_SLOT, -1)
-        if (!validSlot(slot)) return
-        setIntent(intent)
-        vm.slotId = slot
-        locked = phoneLocked()
-        if (locked) vm.hideDetails() else vm.load()
     }
 
     companion object {

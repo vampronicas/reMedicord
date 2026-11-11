@@ -106,10 +106,9 @@ class V12FeaturesTest {
         assertTrue(actions.take(dose.id))
         val info = service.deleteInfo(id)!!
         assertTrue(info.startedMustComplete)
-        assertTrue(service.delete(id, "Delete", warningAcknowledged = false) is ActionResult.NeedsConfirmation)
-        assertTrue(service.delete(id, "Amoxicillin", warningAcknowledged = true) is ActionResult.Invalid) // the name is no longer the word
-        assertTrue(service.delete(id, "Delet", warningAcknowledged = true) is ActionResult.Invalid)
-        assertEquals(ActionResult.Done, service.delete(id, "delete", warningAcknowledged = true))
+        assertTrue(service.delete(id, "Amoxicillin", warningAcknowledged = false) is ActionResult.NeedsConfirmation)
+        assertTrue(service.delete(id, "Amoxicilin", warningAcknowledged = true) is ActionResult.Invalid) // typo
+        assertEquals(ActionResult.Done, service.delete(id, "amoxicillin", warningAcknowledged = true))
         assertNull(db.medicationDao().get(id))
         assertEquals(0, db.doseEventDao().forMedication(id).size)
         assertEquals(0, db.regimenDao().forMedication(id).size)
@@ -121,7 +120,7 @@ class V12FeaturesTest {
     @Test fun normalMedicineDeletesWithoutTheExtraWarning() = runTest {
         val id = create("Wrong one")
         assertFalse(service.deleteInfo(id)!!.startedMustComplete)
-        assertEquals(ActionResult.Done, service.delete(id, "Delete", warningAcknowledged = false))
+        assertEquals(ActionResult.Done, service.delete(id, "Wrong one", warningAcknowledged = false))
     }
 
     @Test fun undoRestoresTheDoseExactly() = runTest {

@@ -90,9 +90,6 @@ private fun MainApp() {
     val entry by nav.currentBackStackEntryAsState()
     val dest = entry?.destination
     val showBar = tabs.any { t -> dest?.hasRoute(t.route::class) == true }
-    // Opening a medicine page: if that page is already open further back (e.g. jumping between an upgraded medicine
-    // and its replacement), go back to it instead of stacking another copy; never put the same page on top twice.
-    fun openDetail(id: Long) = nav.openDetail(id)
     // Each time the app is opened (after the PIN): ask about doses waiting for an answer ("Later", phone off, paused).
     val prompt: com.remedicord.ui.today.ReviewPromptViewModel = hiltViewModel()
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -126,7 +123,7 @@ private fun MainApp() {
                 }
                 composable<ReviewRoute> { ReviewScreen(hiltViewModel(), onDone = { nav.popBackStack() }) }
                 composable<MedicationsRoute> {
-                    MedicationsScreen(hiltViewModel(), onAdd = { nav.navigate(EditorRoute()) }, onOpen = { openDetail(it) })
+                    MedicationsScreen(hiltViewModel(), onAdd = { nav.navigate(EditorRoute()) }, onOpen = { nav.navigate(DetailRoute(it)) })
                 }
                 composable<HistoryRoute> { HistoryScreen(hiltViewModel()) }
                 composable<SettingsRoute> { SettingsScreen(hiltViewModel(), onHealth = { nav.navigate(HealthRoute) }, onBackup = { nav.navigate(BackupRoute) }) }
@@ -135,7 +132,7 @@ private fun MainApp() {
                 composable<EditorRoute> { EditorScreen(hiltViewModel(), onDone = { nav.popBackStack() }) }
                 composable<DetailRoute> {
                     DetailScreen(hiltViewModel(), onBack = { nav.popBackStack() }, onEdit = { nav.navigate(EditorRoute(it)) },
-                        onOpenMedication = { openDetail(it) }, onReplace = { nav.navigate(EditorRoute(replaces = it)) })
+                        onOpenMedication = { nav.navigate(DetailRoute(it)) }, onReplace = { nav.navigate(EditorRoute(replaces = it)) })
                 }
             }
         }
@@ -160,12 +157,4 @@ private fun IncognitoKeyboard(content: @Composable () -> Unit) {
         },
         content = content,
     )
-}
-
-/**
- * Opens a medicine page without stacking copies: if that page is already in the back stack (e.g. jumping between an
- * upgraded medicine and its replacement), go back to it; otherwise open it, never twice on top.
- */
-fun androidx.navigation.NavHostController.openDetail(id: Long) {
-    if (!popBackStack(DetailRoute(id), inclusive = false)) navigate(DetailRoute(id)) { launchSingleTop = true }
 }

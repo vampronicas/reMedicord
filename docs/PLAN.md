@@ -389,17 +389,7 @@ Every phase also requires **`gradlew verifyAll` to pass** (all automated tests +
 - **Done when:** `gradlew assembleRelease` produces a signed APK that installs and opens, and the merged manifest has no INTERNET.
 
 ### Progress log (2026-11-07)
-**v1.4.2 (2026-11-11):** security review of all source code and libraries:
-- Libraries: every library in the app (137, including indirect ones) and every build tool / test library (498 recorded in `verification-metadata.xml`) checked against OSV (osv.dev). **App: no known vulnerabilities.** Build tools only: AGP 9.4.1 (latest stable; 9.5.0 is the same), its lint tool, Hilt/Room code generators and Kover pulled in Bouncy Castle 1.80.2, Guava 33.4/33.6, commons-lang3 3.16.0, jose4j 0.9.5, jdom2 2.0.6, freemarker 2.3.32 and httpclient 4.5.6, all with published advisories → the build now requires the patched releases (Bouncy Castle 1.86, Guava 33.7.2, commons-lang3 3.21.0, jose4j 0.9.7, jdom2 2.0.6.1, freemarker 2.3.35, httpclient 4.5.14). The old versions were removed from the trusted list, so the build fails if anything asks for them again. New checksums cross-checked against an independent download. SQLCipher 4.19.1 is on SQLite 3.53.4, which already includes every fix on sqlite.org's CVE list.
-- Reminder screen: if it was open with medicine details and the phone was locked, the details and buttons stayed visible over the lock screen. They're now hidden again until unlock. A newer reminder arriving while the screen is open now replaces the old one.
-- Backup restore: settings are now an allow-list with allowed values (the Settings screen's choices). A crafted backup can no longer set e.g. a huge app-lock timeout (which would have stopped the app re-locking). The saved timeout is also range-checked when loaded.
-- Backup restore: change-history entries must be valid JSON with no control / text-direction characters (they are shown on the medicine page).
-
-**v1.4.1 (2026-11-11):** fixes:
-- jumping between linked (upgraded / replaced) medicine pages no longer stacks copies of the same pages
-- delete confirmation asks for the word "Delete"
-- "filled in later" removed from cards (shown as "recorded afterwards" in the record panel only)
-- backups now include all app settings: reminder sound and backup-reminder interval were missing; sound and lock timeout take effect right after a restore (PIN, permissions and backup dates stay on the phone)
+**v1.4.3 (2026-11-11):** fallback, at the owner's request: the code is exactly v1.4.0 (commit 2a30373), renumbered 1.4.3 / versionCode 8 so it installs over 1.4.1 and 1.4.2 (database unchanged since 1.4.0, so data is kept). The v1.4.1 and v1.4.2 changes (including the v1.4.2 security fixes) are not included; they remain in git history (8cb60ba, 5e4e2b1). Note: this version can't restore backups made with 1.4.1 / 1.4.2 (they contain settings 1.4.0 doesn't accept).
 
 **v1.4.0 (2026-11-10):**
 - Change history on the medicine page (dose / quantity / schedule changes, detail edits, pause / resume / stop / restart / replacement), built from the audit trail
@@ -519,7 +509,7 @@ Real-device checks that can't be fully automated (run with `adb` scripts where p
 | Guessing the PIN | Salted PBKDF2 hash, escalating lockout that survives restarts |
 | Debug access | Release APK is `debuggable=false`, logs stripped by R8, no test hooks in release |
 | Backup to cloud / other device | `allowBackup=false` + data-extraction rules exclude everything |
-| Vulnerable libraries | Minimal dependencies (Google/JetBrains + SQLCipher only), latest stable versions. Checked against OSV (osv.dev) for the app and all build tools; patched versions forced where a build tool lags (root and app `build.gradle.kts`, v1.4.2) |
+| Vulnerable libraries | Minimal dependencies (Google/JetBrains + SQLCipher only), latest stable versions |
 | Secrets leaking into the public repo | `.gitignore` + pre-push secret check (§3.3) |
 
 **Out of scope (can't be prevented by any app):** a rooted or compromised phone, someone who knows your PIN, or an accessibility app you granted full screen access to yourself.

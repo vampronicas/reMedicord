@@ -170,7 +170,7 @@ class DetailViewModel @Inject constructor(
 
     fun delete(typedName: String, warningAcknowledged: Boolean) = viewModelScope.launch {
         val info = _deleteInfo.value ?: return@launch
-        if (!typedName.trim().equals(MedicationService.DELETE_WORD, ignoreCase = true)) return@launch
+        if (!typedName.trim().equals(info.name.trim(), ignoreCase = true)) return@launch
         backup.saveSnapshot() // undo point (Backup & restore → snapshots)
         val openSlots = doseRepo.forMedication(id).filter { it.status == DoseStatus.DUE || it.status == DoseStatus.SNOOZED }.mapNotNull { it.slotId }
         when (val r = service.delete(id, typedName, warningAcknowledged)) {
