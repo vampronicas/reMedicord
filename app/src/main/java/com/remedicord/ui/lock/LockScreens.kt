@@ -30,7 +30,6 @@ import androidx.lifecycle.viewModelScope
 import com.remedicord.core.lock.AppLockManager
 import com.remedicord.core.lock.PinRepository
 import com.remedicord.core.lock.PinRepository.VerifyResult
-import com.remedicord.domain.lock.PinHasher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -109,8 +108,6 @@ class LockViewModel @Inject constructor(
         val remaining = pins.lockRemainingMs()
         _state.update { it.copy(lockRemainingMs = remaining, message = if (remaining == 0L) null else it.message) }
     }
-
-    fun isValid(pin: String) = PinHasher.isValidPin(pin)
 }
 
 /** S0 / PIN setup (S1 first step). The PIN is entered on this in-app keypad, never the system keyboard. */

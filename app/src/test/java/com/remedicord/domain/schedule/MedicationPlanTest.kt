@@ -22,7 +22,7 @@ class MedicationPlanTest {
     private val utc = ZoneOffset.UTC
     private fun i(s: String) = Instant.parse(s)
     private val twiceDaily = listOf(Regimen(1, i("2026-03-01T00:00:00Z"), null,
-        ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0), LocalTime.of(20, 0))), BigDecimal.ONE, DoseUnit.TABLET))
+        ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)))))
 
     @Test fun planWithoutSkips() {
         val items = MedicationPlan.plan(twiceDaily, utc, emptyList(), i("2026-03-02T00:00:00Z"), i("2026-03-03T00:00:00Z"))

@@ -107,12 +107,8 @@ class DoseRepository(
     suspend fun get(id: Long): DoseEventEntity? = doses.get(id)
     suspend fun inSlot(slotId: Long): List<DoseEventEntity> = doses.inSlot(slotId)
     suspend fun forMedication(medicationId: Long): List<DoseEventEntity> = doses.forMedication(medicationId)
-    suspend fun countWithStatus(medicationId: Long, status: DoseStatus): Int = doses.countWithStatus(medicationId, status)
     suspend fun awaiting(fromInclusive: Long, toExclusive: Long): List<DoseEventEntity> = doses.awaitingReminder(fromInclusive, toExclusive)
     suspend fun countUnconfirmed(): Int = doses.withStatus(DoseStatus.UNCONFIRMED).size
-
-    /** Planner output: system-generated, not audited (nothing a user changed yet). */
-    suspend fun insertPlannedIfAbsent(planned: List<DoseEventEntity>): List<Long> = doses.insertIfAbsent(planned)
 
     suspend fun deleteFuturePlanned(medicationId: Long, fromInclusive: Long): Int =
         doses.deleteFuturePlanned(medicationId, fromInclusive)
@@ -160,17 +156,15 @@ class SkipRuleRepository(
     }
 }
 
-/** Key/value settings inside the encrypted DB. Keys under [PRIVATE_PREFIX] are never exported (PIN etc.). */
-class SettingsRepository(private val db: AppDatabase) {
+/**
+ * Key/value settings inside the encrypted DB. Keys under [PRIVATE_PREFIX] (PIN etc.) are never exported:
+ * backups carry only the allow-listed settings in BackupCodec.
+ */
+class SettingsRepository(db: AppDatabase) {
     private val settings = db.settingDao()
 
     suspend fun get(key: String): String? = settings.get(key)
-    fun observe(key: String): Flow<String?> = settings.observe(key)
     suspend fun put(key: String, value: String) = settings.put(SettingEntity(key, value))
-    suspend fun remove(key: String) = settings.delete(key)
-
-    /** Settings that may be written to a backup file (excludes PIN hash / lock state). */
-    suspend fun exportable(): List<SettingEntity> = settings.getAll().filterNot { it.key.startsWith(PRIVATE_PREFIX) }
 
     companion object {
         const val PRIVATE_PREFIX = "private."

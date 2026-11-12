@@ -1,5 +1,6 @@
 package com.remedicord.reminders
 
+import com.remedicord.deleteTestKey
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -47,7 +48,7 @@ class ReminderEngineTest {
     private lateinit var settings: SettingsRepository
 
     @Before fun setUp() {
-        context.deleteDatabase("rem-test.db"); keys.deleteAllKeyMaterial()
+        context.deleteDatabase("rem-test.db"); deleteTestKey(context, "rem_test_key")
         db = AppDatabase.open(context, keys, "rem-test.db")
         val time = TimeProvider()
         val audit = AuditLogger(db.auditLogDao(), time)
@@ -59,7 +60,7 @@ class ReminderEngineTest {
         actions = DoseActionService(doses, meds, time, planner)
     }
 
-    @After fun tearDown() { db.close(); context.deleteDatabase("rem-test.db"); keys.deleteAllKeyMaterial() }
+    @After fun tearDown() { db.close(); context.deleteDatabase("rem-test.db"); deleteTestKey(context, "rem_test_key") }
 
     private fun soon(minutes: Long) = LocalTime.now(ZoneId.systemDefault()).plusMinutes(minutes).withSecond(0).withNano(0)
 
@@ -104,7 +105,6 @@ class ReminderEngineTest {
         assertTrue(actions.skip(b.id, "Felt unwell"))
         assertTrue(!actions.skip(b.id, " "))
         assertTrue(db.auditLogDao().forEntity(AuditLogger.DOSE, a.id).size >= 2)
-        assertTrue(!actions.logLate(b.id, Instant.now())) // skipped, not missed
     }
 
     @Test fun pendingIntentsAreImmutable() {

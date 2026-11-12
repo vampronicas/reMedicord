@@ -1,5 +1,6 @@
 package com.remedicord.reminders
 
+import com.remedicord.deleteTestKey
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -45,7 +46,7 @@ class V14FeaturesTest {
     private lateinit var service: MedicationService
 
     @Before fun setUp() {
-        context.deleteDatabase("v14-test.db"); keys.deleteAllKeyMaterial()
+        context.deleteDatabase("v14-test.db"); deleteTestKey(context, "v14_test_key")
         db = AppDatabase.open(context, keys, "v14-test.db")
         val time = TimeProvider()
         val audit = AuditLogger(db.auditLogDao(), time)
@@ -55,7 +56,7 @@ class V14FeaturesTest {
         service = MedicationService(meds, SkipRuleRepository(db, audit, time), doses, time, planner)
     }
 
-    @After fun tearDown() { db.close(); context.deleteDatabase("v14-test.db"); keys.deleteAllKeyMaterial() }
+    @After fun tearDown() { db.close(); context.deleteDatabase("v14-test.db"); deleteTestKey(context, "v14_test_key") }
 
     private fun soon(min: Long) = LocalTime.now(ZoneId.systemDefault()).plusMinutes(min).withSecond(0).withNano(0)
     private fun form(name: String, must: Boolean = false) = MedicationForm(name = name, type = MedicationType.PILL, purpose = MedicationPurpose.TREATMENT,
@@ -96,7 +97,7 @@ class V14FeaturesTest {
         val oldId = id("Old")
         var newId = -1L
         service.replace(oldId, form("New"), confirmed = false) { newId = it }
-        assertEquals(ActionResult.Done, service.delete(newId, "New", warningAcknowledged = true))
+        assertEquals(ActionResult.Done, service.delete(newId, "Delete", warningAcknowledged = true))
         assertNull(db.medicationDao().get(oldId)!!.replacedById)
     }
 

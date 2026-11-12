@@ -8,14 +8,12 @@ import com.remedicord.domain.model.DoseStatus.PLANNED
 import com.remedicord.domain.model.DoseStatus.SKIPPED
 import com.remedicord.domain.model.DoseStatus.TAKEN
 import com.remedicord.domain.model.DoseStatus.UNCONFIRMED
-import com.remedicord.domain.model.DoseUnit
 import com.remedicord.domain.model.Regimen
 import com.remedicord.domain.model.ScheduleRule
 import com.remedicord.domain.policy.FlexiblePolicy.Slot
 import com.remedicord.domain.schedule.DoseGenerator
 import com.remedicord.domain.usecase.FormValidator
 import com.remedicord.domain.usecase.MedicationForm
-import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -81,7 +79,7 @@ class FlexiblePolicyTest {
 
     private val flexRule = ScheduleRule.FlexibleDaily(2, listOf(ScheduleRule.Period("Morning", LocalTime.of(8, 0)),
         ScheduleRule.Period("Afternoon", LocalTime.of(13, 0)), ScheduleRule.Period("Evening", LocalTime.of(19, 0))))
-    private val flexRegimen = Regimen(1, Instant.parse("2026-11-01T00:00:00Z"), null, flexRule, BigDecimal.ONE, DoseUnit.TABLET)
+    private val flexRegimen = Regimen(1, Instant.parse("2026-11-01T00:00:00Z"), null, flexRule)
 
     @Test fun generatorOffersEveryPeriodButOnlyDailyNumberCounts() {
         val doses = DoseGenerator.generate(listOf(flexRegimen), ZoneOffset.UTC, Instant.parse("2026-11-09T00:00:00Z"), Instant.parse("2026-11-11T00:00:00Z"))
@@ -113,14 +111,6 @@ class HistoryFiltersAndPurposeTest {
         assertEquals(2, s.size)
         assertEquals(2, s[0].taken); assertEquals(2, s[0].total); assertTrue(s[0].complete)
         assertEquals(1, s[1].missed); assertEquals(1, s[1].needsAnswer); assertEquals(1, s[1].skipped); assertEquals(1, s[1].upcoming); assertFalse(s[1].complete)
-    }
-
-    @Test fun multiSelectStatusFilter() {
-        val sel = setOf(HistoryCalc.StatusFilter.MISSED, HistoryCalc.StatusFilter.NEEDS_ANSWER)
-        assertTrue(HistoryCalc.matches(MISSED, sel)); assertTrue(HistoryCalc.matches(UNCONFIRMED, sel))
-        assertFalse(HistoryCalc.matches(TAKEN, sel))
-        assertTrue(HistoryCalc.matches(TAKEN, emptySet()))
-        assertTrue(HistoryCalc.matches(DoseStatus.SNOOZED, setOf(HistoryCalc.StatusFilter.UPCOMING)))
     }
 
     @Test fun purposeIsRequired() {

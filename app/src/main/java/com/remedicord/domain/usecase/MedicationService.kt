@@ -30,7 +30,7 @@ import java.time.ZoneId
 
 fun RegimenEntity.toDomain() = Regimen(
     id, Instant.ofEpochMilli(effectiveFrom), effectiveTo?.let(Instant::ofEpochMilli),
-    ScheduleRule.fromJson(scheduleRuleJson), doseAmount, doseUnit,
+    ScheduleRule.fromJson(scheduleRuleJson),
 )
 
 fun MedicationEntity.courseInfo() = CourseInfo(mustComplete, courseMode, courseLength, courseStartEpochDay?.let(LocalDate::ofEpochDay))
@@ -205,7 +205,7 @@ class MedicationService(
     }
 
     /**
-     * E4: permanently deletes a medicine and all its records (added by mistake). [typedName] must match the name;
+     * E4: permanently deletes a medicine and all its records (added by mistake). [typedName] must be the word "Delete" (any case);
      * a started must-complete course also needs [warningAcknowledged]. The caller saves an undo snapshot first.
      */
     suspend fun delete(medicationId: Long, typedName: String, warningAcknowledged: Boolean): ActionResult {
@@ -213,7 +213,7 @@ class MedicationService(
         if (info.startedMustComplete && !warningAcknowledged) {
             return ActionResult.NeedsConfirmation("This course must be completed and has already started (${info.taken} of ${info.required ?: "?"} taken).")
         }
-        if (!typedName.trim().equals(info.name.trim(), ignoreCase = true)) return ActionResult.Invalid(listOf("Type the medicine's name exactly to confirm"))
+        if (!typedName.trim().equals(DELETE_WORD, ignoreCase = true)) return ActionResult.Invalid(listOf("Type \"$DELETE_WORD\" to confirm"))
         meds.delete(medicationId)
         replanner.replan()
         return ActionResult.Done
@@ -266,4 +266,9 @@ class MedicationService(
     private fun regimenEntity(medId: Long, from: Long, to: Long?, rule: ScheduleRule, amount: BigDecimal, unit: DoseUnit, reason: String) =
         RegimenEntity(medicationId = medId, effectiveFrom = from, effectiveTo = to, doseAmount = amount, doseUnit = unit,
             scheduleRuleJson = ScheduleRule.toJson(rule), changeReason = reason, createdAt = 0)
+
+    companion object {
+        /** Word to type to confirm deleting a medicine. */
+        const val DELETE_WORD = "Delete"
+    }
 }

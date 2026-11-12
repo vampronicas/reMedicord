@@ -1,5 +1,6 @@
 package com.remedicord.reminders
 
+import com.remedicord.deleteTestKey
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -47,7 +48,7 @@ class NewRecordRulesTest {
     private lateinit var settings: SettingsRepository
 
     @Before fun setUp() {
-        context.deleteDatabase("rules-test.db"); keys.deleteAllKeyMaterial()
+        context.deleteDatabase("rules-test.db"); deleteTestKey(context, "rules_test_key")
         db = AppDatabase.open(context, keys, "rules-test.db")
         val time = TimeProvider()
         val audit = AuditLogger(db.auditLogDao(), time)
@@ -59,7 +60,7 @@ class NewRecordRulesTest {
         actions = DoseActionService(doses, meds, time, planner)
     }
 
-    @After fun tearDown() { db.close(); context.deleteDatabase("rules-test.db"); keys.deleteAllKeyMaterial() }
+    @After fun tearDown() { db.close(); context.deleteDatabase("rules-test.db"); deleteTestKey(context, "rules_test_key") }
 
     private fun soon(min: Long) = LocalTime.now(ZoneId.systemDefault()).plusMinutes(min).withSecond(0).withNano(0)
     private suspend fun create(rule: ScheduleRule, name: String = "Med"): Long {
@@ -105,7 +106,7 @@ class NewRecordRulesTest {
         assertEquals(DoseStatus.UNCONFIRMED, db.doseEventDao().get(recent)!!.status)
         // Older than 5 days: can't be changed any more. Within 5 days: can.
         assertFalse(actions.edit(old, DoseStatus.TAKEN, null, null))
-        assertFalse(actions.logLate(old, Instant.ofEpochMilli(sixDaysAgo)))
+        assertFalse(actions.edit(old, DoseStatus.TAKEN, Instant.ofEpochMilli(sixDaysAgo), null))
         assertTrue(actions.review(recent, DoseActionService.ReviewAnswer.TAKEN))
     }
 

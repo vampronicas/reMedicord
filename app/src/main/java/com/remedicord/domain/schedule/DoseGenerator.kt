@@ -29,7 +29,7 @@ object DoseGenerator {
             val from = maxOf(fromInclusive, reg.effectiveFrom)
             val to = reg.effectiveTo?.let { minOf(toExclusive, it) } ?: toExclusive
             if (!from.isBefore(to)) emptyList()
-            else instantsFor(reg, zone, from, to).map { PlannedDose(reg.id, it, zone) }
+            else instantsFor(reg, zone, from, to).map { PlannedDose(reg.id, it) }
         }.distinctBy { it.at }.sortedBy { it.at }
     }
 

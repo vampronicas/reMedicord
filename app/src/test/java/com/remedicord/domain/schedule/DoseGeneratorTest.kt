@@ -28,7 +28,7 @@ class DoseGeneratorTest {
     private fun t(s: String) = LocalTime.parse(s)
     private fun i(s: String) = Instant.parse(s)
     private fun reg(rule: ScheduleRule, from: String = "2026-01-01T00:00:00Z", to: String? = null, id: Long = 1) =
-        Regimen(id, i(from), to?.let(::i), rule, BigDecimal.ONE, DoseUnit.TABLET)
+        Regimen(id, i(from), to?.let(::i), rule)
 
     private fun gen(r: List<Regimen>, zone: ZoneId, from: String, to: String) = DoseGenerator.generate(r, zone, i(from), i(to))
 
@@ -127,7 +127,7 @@ class DoseGeneratorTest {
         )
         val planned = TaperBuilder.build(steps, LocalDate.of(2026, 3, 1), zone)
         assertEquals(planned[0].effectiveTo, planned[1].effectiveFrom)
-        val regimens = planned.mapIndexed { idx, p -> Regimen(idx + 1L, p.effectiveFrom, p.effectiveTo, p.rule, p.amount, p.unit) }
+        val regimens = planned.mapIndexed { idx, p -> Regimen(idx + 1L, p.effectiveFrom, p.effectiveTo, p.rule) }
         val doses = DoseGenerator.generate(regimens, zone, planned.first().effectiveFrom, planned.last().effectiveTo.plus(Duration.ofDays(5)))
         assertEquals(2 * 4 + 3 * 2, doses.size)
         assertThrows(IllegalArgumentException::class.java) { TaperBuilder.build(emptyList(), LocalDate.of(2026, 3, 1), zone) }

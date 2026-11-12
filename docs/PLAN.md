@@ -248,7 +248,7 @@ Notification button → DoseActionReceiver (not exported)
 \* The encrypted DB can't be opened before the first unlock after a restart. On `LOCKED_BOOT_COMPLETED`, alarms are set again from the timestamp-only list in device-protected storage and show the generic reminder. After the first unlock, a full replan runs.
 
 ### Permissions (complete list)
-`POST_NOTIFICATIONS`, `USE_EXACT_ALARM` (API 33+), `SCHEDULE_EXACT_ALARM` (maxSdk 32), `USE_FULL_SCREEN_INTENT`, `RECEIVE_BOOT_COMPLETED`, `VIBRATE`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. **Nothing else.**
+`POST_NOTIFICATIONS`, `USE_EXACT_ALARM` (API 33+), `SCHEDULE_EXACT_ALARM` (maxSdk 32), `USE_FULL_SCREEN_INTENT`, `RECEIVE_BOOT_COMPLETED`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. **Nothing else.**
 
 ---
 
@@ -389,7 +389,21 @@ Every phase also requires **`gradlew verifyAll` to pass** (all automated tests +
 - **Done when:** `gradlew assembleRelease` produces a signed APK that installs and opens, and the merged manifest has no INTERNET.
 
 ### Progress log (2026-11-07)
-**v1.4.3 (2026-11-11):** fallback, at the owner's request: the code is exactly v1.4.0 (commit 2a30373), renumbered 1.4.3 / versionCode 8 so it installs over 1.4.1 and 1.4.2 (database unchanged since 1.4.0, so data is kept). The v1.4.1 and v1.4.2 changes (including the v1.4.2 security fixes) are not included; they remain in git history (8cb60ba, 5e4e2b1). Note: this version can't restore backups made with 1.4.1 / 1.4.2 (they contain settings 1.4.0 doesn't accept).
+**v1.4.4 (2026-11-12):** the v1.4.2 code again (all v1.4.1 fixes + v1.4.2 security fixes), renumbered 1.4.4 / versionCode 9 so it installs over 1.4.3. Before release, every change since v1.4.0 was re-audited line by line (no new permissions, components, network, native or dynamic code), libraries re-checked against OSV, and the release APK inspected (permissions, contents, compiled code). Changes vs 1.4.2 (owner's rule: nothing in the app that isn't used): removed unused permissions `VIBRATE` (reminders vibrate through their notification channel, driven by Android) and AndroidX's `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (no run-time receivers); removed code nothing calls (found with R8's usage report): DAO/repository functions `upsert`, `countWithStatus`, `dueOrSnoozed`, settings `observe`/`delete`/`remove`/`exportable`, `insertPlannedIfAbsent`, `Regimen.isActiveAt`, the never-read fields `Regimen.amount`/`unit` and `PlannedDose.zone`, the old history `StatusFilter`, the old `logLate` path (superseded by the record panel's `edit`), an unused icon, an unused PIN check, an extra on the "Skip…" notification button that nothing read; the test-only key-deletion helper moved out of the app into the tests. Garbled code comment fixed.
+
+**v1.4.3 (2026-11-11):** temporary fallback at the owner's request: exactly the v1.4.0 code (2a30373), renumbered 1.4.3 / versionCode 8.
+
+**v1.4.2 (2026-11-11):** security review of all source code and libraries:
+- Libraries: every library in the app (137, including indirect ones) and every build tool / test library (498 recorded in `verification-metadata.xml`) checked against OSV (osv.dev). **App: no known vulnerabilities.** Build tools only: AGP 9.4.1 (latest stable; 9.5.0 is the same), its lint tool, Hilt/Room code generators and Kover pulled in Bouncy Castle 1.80.2, Guava 33.4/33.6, commons-lang3 3.16.0, jose4j 0.9.5, jdom2 2.0.6, freemarker 2.3.32 and httpclient 4.5.6, all with published advisories → the build now requires the patched releases (Bouncy Castle 1.86, Guava 33.7.2, commons-lang3 3.21.0, jose4j 0.9.7, jdom2 2.0.6.1, freemarker 2.3.35, httpclient 4.5.14). The old versions were removed from the trusted list, so the build fails if anything asks for them again. New checksums cross-checked against an independent download. SQLCipher 4.19.1 is on SQLite 3.53.4, which already includes every fix on sqlite.org's CVE list.
+- Reminder screen: if it was open with medicine details and the phone was locked, the details and buttons stayed visible over the lock screen. They're now hidden again until unlock. A newer reminder arriving while the screen is open now replaces the old one.
+- Backup restore: settings are now an allow-list with allowed values (the Settings screen's choices). A crafted backup can no longer set e.g. a huge app-lock timeout (which would have stopped the app re-locking). The saved timeout is also range-checked when loaded.
+- Backup restore: change-history entries must be valid JSON with no control / text-direction characters (they are shown on the medicine page).
+
+**v1.4.1 (2026-11-11):** fixes:
+- jumping between linked (upgraded / replaced) medicine pages no longer stacks copies of the same pages
+- delete confirmation asks for the word "Delete"
+- "filled in later" removed from cards (shown as "recorded afterwards" in the record panel only)
+- backups now include all app settings: reminder sound and backup-reminder interval were missing; sound and lock timeout take effect right after a restore (PIN, permissions and backup dates stay on the phone)
 
 **v1.4.0 (2026-11-10):**
 - Change history on the medicine page (dose / quantity / schedule changes, detail edits, pause / resume / stop / restart / replacement), built from the audit trail
@@ -509,7 +523,7 @@ Real-device checks that can't be fully automated (run with `adb` scripts where p
 | Guessing the PIN | Salted PBKDF2 hash, escalating lockout that survives restarts |
 | Debug access | Release APK is `debuggable=false`, logs stripped by R8, no test hooks in release |
 | Backup to cloud / other device | `allowBackup=false` + data-extraction rules exclude everything |
-| Vulnerable libraries | Minimal dependencies (Google/JetBrains + SQLCipher only), latest stable versions |
+| Vulnerable libraries | Minimal dependencies (Google/JetBrains + SQLCipher only), latest stable versions. Checked against OSV (osv.dev) for the app and all build tools; patched versions forced where a build tool lags (root and app `build.gradle.kts`, v1.4.2) |
 | Secrets leaking into the public repo | `.gitignore` + pre-push secret check (§3.3) |
 
 **Out of scope (can't be prevented by any app):** a rooted or compromised phone, someone who knows your PIN, or an accessibility app you granted full screen access to yourself.
@@ -524,7 +538,7 @@ Real-device checks that can't be fully automated (run with `adb` scripts where p
 7. **Lint security rules** treated as errors (exported components, unsafe intents, crypto misuse, logging).
 
 ### 12.3 Release security check (on a real device, scripted with adb)
-- `adb shell dumpsys package com.remedicord` → confirm **zero exported components besides the launcher**, and the permission list is exactly: `POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `SCHEDULE_EXACT_ALARM` (≤ API 32), `USE_FULL_SCREEN_INTENT`, `RECEIVE_BOOT_COMPLETED`, `VIBRATE`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+- `adb shell dumpsys package com.remedicord` → confirm **zero exported components besides the launcher**, and the permission list is exactly: `POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `SCHEDULE_EXACT_ALARM` (≤ API 32), `USE_FULL_SCREEN_INTENT`, `RECEIVE_BOOT_COMPLETED`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
 - `adb shell am start` / `am broadcast` against every internal component from outside → must be refused ("not exported").
 - Confirm the app has no network access listed in system settings.
 - Optional deeper scan with the open-source **MobSF** static analyser (run locally on the PC) on the release APK.

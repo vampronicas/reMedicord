@@ -53,8 +53,8 @@ android {
         applicationId = "com.remedicord"
         minSdk = 31
         targetSdk = 37
-        versionCode = 8
-        versionName = "1.4.3"
+        versionCode = 9
+        versionName = "1.4.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -143,6 +143,17 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    // Build-time security fix (not shipped in the app): the code generators above still pull in a Guava version
+    // with advisory GHSA-xxph-c9ww-hj94 (OSV scan, 2026-11-11). Remove once Hilt/Room ship the fixed version.
+    constraints { ksp("com.google.guava:guava:33.7.2-jre") }
+    // Same for the lint tool AGP downloads separately (GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-wg6q-6289-32hp,
+    // GHSA-xxph-c9ww-hj94, GHSA-j288-q9x7-2f5v, GHSA-7r82-7xv7-xcpj). Versions match the root build.gradle.kts fixes.
+    constraints {
+        listOf(
+            "org.bouncycastle:bcprov-jdk18on:1.86", "org.bouncycastle:bcpkix-jdk18on:1.86", "org.bouncycastle:bcutil-jdk18on:1.86",
+            "com.google.guava:guava:33.7.2-jre", "org.apache.commons:commons-lang3:3.21.0", "org.apache.httpcomponents:httpclient:4.5.14",
+        ).forEach { add("androidLintTool", it) }
+    }
     implementation(libs.androidx.sqlite)
     implementation(libs.sqlcipher.android)
     implementation(libs.kotlinx.coroutines.android)
@@ -238,27 +249,21 @@ androidComponents {
     // Strict gate on the RELEASE build (the only APK ever installed on the phone). Debug builds
     // legitimately contain debug tooling (Compose preview activities, debuggable=true) and are emulator-only.
     onVariants(selector().withBuildType("release")) { variant ->
-        val appId = variant.applicationId
         val cap = variant.name.replaceFirstChar { it.uppercase() }
         val verify = tasks.register<VerifyManifestSecurityTask>("verify${cap}ManifestSecurity") {
             group = "verification"
             description = "Fails if the merged ${variant.name} manifest exposes anything (see PLAN.md §12)."
             mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
             allowedPermissions.set(
-                appId.map { id ->
-                    setOf(
-                        // Final list from PLAN.md §5 (added as features arrive):
-                        "android.permission.POST_NOTIFICATIONS",
-                        "android.permission.USE_EXACT_ALARM",
-                        "android.permission.SCHEDULE_EXACT_ALARM",
-                        "android.permission.USE_FULL_SCREEN_INTENT",
-                        "android.permission.RECEIVE_BOOT_COMPLETED",
-                        "android.permission.VIBRATE",
-                        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-                        // AndroidX internal, signature-level: protects the app's own non-exported receivers.
-                        "$id.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
-                    )
-                }
+                setOf(
+                    // Final list from PLAN.md §5. Nothing else may appear in the release manifest.
+                    "android.permission.POST_NOTIFICATIONS",
+                    "android.permission.USE_EXACT_ALARM",
+                    "android.permission.SCHEDULE_EXACT_ALARM",
+                    "android.permission.USE_FULL_SCREEN_INTENT",
+                    "android.permission.RECEIVE_BOOT_COMPLETED",
+                    "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+                ),
             )
             allowedExported.set(setOf("com.remedicord.MainActivity"))
             // AndroidX's internal startup initializer (non-exported; needed by Lifecycle/Compose).

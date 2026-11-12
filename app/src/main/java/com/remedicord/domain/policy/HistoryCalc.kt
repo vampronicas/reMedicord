@@ -23,18 +23,6 @@ object HistoryCalc {
         }
     }
 
-    /** History filter chips (multi-select). Empty selection = everything. */
-    enum class StatusFilter(val statuses: Set<DoseStatus>) {
-        TAKEN(setOf(DoseStatus.TAKEN)),
-        MISSED(setOf(DoseStatus.MISSED)),
-        NEEDS_ANSWER(setOf(DoseStatus.UNCONFIRMED)),
-        SKIPPED(setOf(DoseStatus.SKIPPED)),
-        UPCOMING(setOf(DoseStatus.PLANNED, DoseStatus.DUE, DoseStatus.SNOOZED)),
-    }
-
-    fun matches(status: DoseStatus, filters: Set<StatusFilter>): Boolean =
-        filters.isEmpty() || filters.any { status in it.statuses }
-
     data class MedSummary(val medicationId: Long, val taken: Int, val missed: Int, val needsAnswer: Int, val skipped: Int, val upcoming: Int) {
         val total get() = taken + missed + needsAnswer + skipped + upcoming
         val complete get() = total > 0 && taken + skipped == total

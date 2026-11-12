@@ -16,6 +16,10 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object BackupModule {
     @Provides @Singleton
-    fun backupService(@ApplicationContext c: Context, db: AppDatabase, settings: SettingsRepository, replanner: Replanner, time: TimeProvider) =
-        BackupService(c, db, settings, replanner, time, c.packageManager.getPackageInfo(c.packageName, 0).versionName ?: "?")
+    fun backupService(
+        @ApplicationContext c: Context, db: AppDatabase, settings: SettingsRepository, replanner: Replanner, time: TimeProvider,
+        lock: com.remedicord.core.lock.AppLockManager,
+    ) = BackupService(c, db, settings, replanner, time, c.packageManager.getPackageInfo(c.packageName, 0).versionName ?: "?") {
+        lock.applyTimeoutSetting(settings.get(com.remedicord.core.lock.AppLockManager.SETTING_TIMEOUT_MIN))
+    }
 }

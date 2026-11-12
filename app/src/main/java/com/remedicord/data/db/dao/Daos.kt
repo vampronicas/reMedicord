@@ -100,9 +100,6 @@ interface DoseEventDao {
     @Update
     suspend fun update(dose: DoseEventEntity)
 
-    @Upsert
-    suspend fun upsert(dose: DoseEventEntity): Long
-
     @androidx.room.Delete
     suspend fun delete(dose: DoseEventEntity)
 
@@ -129,9 +126,6 @@ interface DoseEventDao {
     @Query("SELECT * FROM dose_event WHERE slotId = :slotId ORDER BY medicationId")
     suspend fun inSlot(slotId: Long): List<DoseEventEntity>
 
-    @Query("SELECT COUNT(*) FROM dose_event WHERE medicationId = :medicationId AND status = :status")
-    suspend fun countWithStatus(medicationId: Long, status: DoseStatus): Int
-
     @Query("DELETE FROM dose_event WHERE status = 'PLANNED' AND medicationId = :medicationId AND scheduledAt >= :fromInclusive")
     suspend fun deleteFuturePlanned(medicationId: Long, fromInclusive: Long): Int
 
@@ -152,9 +146,6 @@ interface DoseEventDao {
     /** Doses in an original slot that still need an answer. */
     @Query("SELECT * FROM dose_event WHERE slotId = :slotId AND status IN ('DUE','SNOOZED','PLANNED') ORDER BY remindAt, medicationId")
     suspend fun openInSlot(slotId: Long): List<DoseEventEntity>
-
-    @Query("SELECT * FROM dose_event WHERE status IN ('DUE','SNOOZED')")
-    suspend fun dueOrSnoozed(): List<DoseEventEntity>
 
     @Query("SELECT * FROM dose_event ORDER BY id")
     suspend fun getAll(): List<DoseEventEntity>
@@ -205,7 +196,7 @@ interface AuditLogDao {
 @Dao
 interface SettingDao {
     /** Removes user settings but keeps this phone's private/device keys (PIN, planner state). */
-    @Query("DELETE FROM setting WHERE `key` NOT LIKE 'private.%' AND `key` NOT LIKE 'planner.%' AND `key` NOT LIKE 'onboarding.%' AND `key` NOT LIKE 'backup.%'")
+    @Query("DELETE FROM setting WHERE `key` NOT LIKE 'private.%' AND `key` NOT LIKE 'planner.%' AND `key` NOT LIKE 'onboarding.%' AND `key` NOT IN ('backup.lastAt', 'backup.lastRemindedAt', 'backup.firstSeenAt')")
     suspend fun deleteExportable()
 
     @Upsert
@@ -213,12 +204,6 @@ interface SettingDao {
 
     @Query("SELECT value FROM setting WHERE `key` = :key")
     suspend fun get(key: String): String?
-
-    @Query("SELECT value FROM setting WHERE `key` = :key")
-    fun observe(key: String): Flow<String?>
-
-    @Query("DELETE FROM setting WHERE `key` = :key")
-    suspend fun delete(key: String)
 
     @Query("SELECT * FROM setting ORDER BY `key`")
     suspend fun getAll(): List<SettingEntity>

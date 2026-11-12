@@ -1,5 +1,6 @@
 package com.remedicord.data.db
 
+import com.remedicord.deleteTestKey
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
@@ -11,9 +12,7 @@ import com.remedicord.data.db.entity.DoseEventEntity
 import com.remedicord.data.db.entity.MedicationEntity
 import com.remedicord.data.db.entity.RegimenEntity
 import com.remedicord.data.repo.AuditLogger
-import com.remedicord.data.repo.DoseRepository
 import com.remedicord.data.repo.MedicationRepository
-import com.remedicord.data.repo.SettingsRepository
 import com.remedicord.domain.model.AuditAction
 import com.remedicord.domain.model.DoseStatus
 import com.remedicord.domain.model.DoseUnit
@@ -43,14 +42,14 @@ class EncryptedDatabaseTest {
 
     @Before fun setUp() {
         context.deleteDatabase(dbName)
-        keys.deleteAllKeyMaterial()
+        deleteTestKey(context, "test_db_key")
         db = AppDatabase.open(context, keys, dbName)
     }
 
     @After fun tearDown() {
         if (::db.isInitialized) db.close()
         context.deleteDatabase(dbName)
-        keys.deleteAllKeyMaterial()
+        deleteTestKey(context, "test_db_key")
     }
 
     private fun med(name: String = "SecretMedicineName123") =
@@ -156,19 +155,11 @@ class EncryptedDatabaseTest {
     @Test fun doseUniquePerMedicationAndTimeAndCascadeDelete() = runTest {
         val id = repo().create(med(), regimen())
         val dose = DoseEventEntity(medicationId = id, scheduledAt = 5000, status = DoseStatus.PLANNED, createdAt = 0, updatedAt = 0)
-        val doseRepo = DoseRepository(db, AuditLogger(db.auditLogDao(), TimeProvider()), TimeProvider())
-        val ids = doseRepo.insertPlannedIfAbsent(listOf(dose, dose.copy(), dose.copy(scheduledAt = 6000)))
+        val ids = db.doseEventDao().insertIfAbsent(listOf(dose, dose.copy(), dose.copy(scheduledAt = 6000)))
         assertEquals(listOf(1L, -1L, 2L).map { it > 0 }, ids.map { it > 0 })
         assertEquals(2, db.doseEventDao().forMedication(id).size)
         assertEquals(2, db.doseEventDao().observeBetween(0, 10_000).first().size)
         db.openHelper.writableDatabase.execSQL("DELETE FROM medication WHERE id = $id")
         assertEquals(0, db.doseEventDao().forMedication(id).size)
-    }
-
-    @Test fun privateSettingsAreNeverExportable() = runTest {
-        val s = SettingsRepository(db)
-        s.put("snooze.options", "5,10,15")
-        s.put(SettingsRepository.PRIVATE_PREFIX + "pin.hash", "abc")
-        assertEquals(listOf("snooze.options"), s.exportable().map { it.key })
     }
 }

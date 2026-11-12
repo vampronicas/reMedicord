@@ -1,5 +1,6 @@
 package com.remedicord.data.backup
 
+import com.remedicord.deleteTestKey
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -38,7 +39,7 @@ class BackupServiceTest {
     private lateinit var settings: SettingsRepository
 
     @Before fun setUp() {
-        context.deleteDatabase("bak-test.db"); keys.deleteAllKeyMaterial()
+        context.deleteDatabase("bak-test.db"); deleteTestKey(context, "bak_test_key")
         db = AppDatabase.open(context, keys, "bak-test.db")
         val time = TimeProvider()
         val audit = AuditLogger(db.auditLogDao(), time)
@@ -49,7 +50,7 @@ class BackupServiceTest {
 
     @After fun tearDown() {
         backup.snapshots().forEach { it.file.delete() }
-        db.close(); context.deleteDatabase("bak-test.db"); keys.deleteAllKeyMaterial()
+        db.close(); context.deleteDatabase("bak-test.db"); deleteTestKey(context, "bak_test_key")
     }
 
     private suspend fun all() = listOf(db.medicationDao().getAll(), db.regimenDao().getAll(), db.skipRuleDao().getAll(), db.auditLogDao().getAll())
@@ -72,6 +73,23 @@ class BackupServiceTest {
         assertEquals("15", settings.get("reminder.snoozeMinutes"))
         assertEquals("PIN-ON-THIS-PHONE", settings.get(SettingsRepository.PRIVATE_PREFIX + "pin.hash"))
         assertEquals(1, backup.snapshots().size) // current data was saved first
+    }
+
+    @Test fun appSettingsIncludingSoundAndLockTravelWithTheBackup() = runTest {
+        com.remedicord.reminders.Notifications.setReminderSound(context, com.remedicord.reminders.Notifications.ReminderSound.BELL)
+        settings.put("lock.timeoutMinutes", "5")
+        settings.put(BackupService.REMINDER_DAYS, "14")
+        settings.put("reminder.snoozeMinutes", "15")
+        val bytes = ByteArrayOutputStream().also { backup.export(it) }.toByteArray()
+        // Change everything on "the new phone".
+        com.remedicord.reminders.Notifications.setReminderSound(context, com.remedicord.reminders.Notifications.ReminderSound.BEEP)
+        settings.put("lock.timeoutMinutes", "0"); settings.put(BackupService.REMINDER_DAYS, "30"); settings.put("reminder.snoozeMinutes", "5")
+        backup.restore(ByteArrayInputStream(bytes))
+        assertEquals(com.remedicord.reminders.Notifications.ReminderSound.BELL, com.remedicord.reminders.Notifications.currentSound(context))
+        assertEquals("5", settings.get("lock.timeoutMinutes"))
+        assertEquals("14", settings.get(BackupService.REMINDER_DAYS))
+        assertEquals("15", settings.get("reminder.snoozeMinutes"))
+        com.remedicord.reminders.Notifications.setReminderSound(context, com.remedicord.reminders.Notifications.ReminderSound.CHIME)
     }
 
     @Test fun invalidFileChangesNothing() = runTest {

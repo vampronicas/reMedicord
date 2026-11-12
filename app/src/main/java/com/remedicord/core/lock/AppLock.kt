@@ -96,6 +96,11 @@ class AppLockManager(private val elapsedRealtime: () -> Long = SystemClock::elap
     @Volatile var timeoutMs: Long = DEFAULT_TIMEOUT_MS
     private var backgroundAt: Long? = null
 
+    /** Applies the saved timeout setting. Only the offered choices are accepted; anything else keeps the current value. */
+    fun applyTimeoutSetting(minutes: String?) {
+        minutes?.toIntOrNull()?.takeIf { it in TIMEOUT_CHOICES_MIN }?.let { timeoutMs = it * 60_000L }
+    }
+
     fun unlock() { _locked.value = false }
     fun lock() { _locked.value = true }
 

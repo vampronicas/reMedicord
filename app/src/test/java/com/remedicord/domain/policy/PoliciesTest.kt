@@ -6,7 +6,6 @@ import com.remedicord.domain.model.DoseStatus.MISSED
 import com.remedicord.domain.model.DoseStatus.SKIPPED
 import com.remedicord.domain.model.DoseStatus.TAKEN
 import com.remedicord.domain.model.DoseStatus.UNCONFIRMED
-import com.remedicord.domain.model.DoseUnit
 import com.remedicord.domain.model.MedicationType
 import com.remedicord.domain.model.PolicyResult
 import com.remedicord.domain.model.Regimen
@@ -14,7 +13,6 @@ import com.remedicord.domain.model.ScheduleRule
 import com.remedicord.domain.model.SkipMode
 import com.remedicord.domain.model.StopReason
 import com.remedicord.domain.schedule.SlotGrouper
-import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -31,7 +29,7 @@ class CoursePolicyTest {
     private val start = LocalDate.of(2026, 3, 1)
     private fun times(vararg s: String) = s.map(LocalTime::parse)
     private fun reg(id: Long, from: String, to: String?, vararg t: String) =
-        Regimen(id, Instant.parse(from), to?.let(Instant::parse), ScheduleRule.FixedTimes(times(*t)), BigDecimal.ONE, DoseUnit.TABLET)
+        Regimen(id, Instant.parse(from), to?.let(Instant::parse), ScheduleRule.FixedTimes(times(*t)))
 
     @Test fun daysModeIsDaysTimesDosesPerDay() {
         val course = CourseInfo(true, CourseMode.DAYS, 7, start)

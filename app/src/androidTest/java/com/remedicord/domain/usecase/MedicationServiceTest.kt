@@ -1,5 +1,6 @@
 package com.remedicord.domain.usecase
 
+import com.remedicord.deleteTestKey
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -43,7 +44,7 @@ class MedicationServiceTest {
     private var replans = 0
 
     @Before fun setUp() {
-        context.deleteDatabase("svc-test.db"); keys.deleteAllKeyMaterial()
+        context.deleteDatabase("svc-test.db"); deleteTestKey(context, "svc_test_key")
         db = AppDatabase.open(context, keys, "svc-test.db")
         val time = TimeProvider()
         val audit = AuditLogger(db.auditLogDao(), time)
@@ -51,7 +52,7 @@ class MedicationServiceTest {
         service = MedicationService(meds, SkipRuleRepository(db, audit, time), DoseRepository(db, audit, time), time) { replans++ }
     }
 
-    @After fun tearDown() { db.close(); context.deleteDatabase("svc-test.db"); keys.deleteAllKeyMaterial() }
+    @After fun tearDown() { db.close(); context.deleteDatabase("svc-test.db"); deleteTestKey(context, "svc_test_key") }
 
     private val daily = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)))
     private fun form(type: MedicationType = MedicationType.PILL, must: Boolean = false) = MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", 
@@ -125,7 +126,8 @@ class MedicationServiceTest {
         assertTrue(pins.verify("2468") is PinRepository.VerifyResult.LockedOut)
         clock += 30_001
         assertEquals(PinRepository.VerifyResult.Success, pins.verify("2468"))
-        assertTrue(settings.exportable().none { it.key.contains("pin") })
+        // Every PIN / lockout key stored is one a backup never carries.
+        assertTrue(settings.getAllKeysForTest().filter { it.contains("pin") }.none { com.remedicord.data.backup.BackupCodec.isExportableSetting(it) })
     }
 
     private suspend fun SettingsRepository.getAllKeysForTest() = db.settingDao().getAll().map { it.key }

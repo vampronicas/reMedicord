@@ -1,5 +1,6 @@
 package com.remedicord.domain.usecase
 
+import com.remedicord.deleteTestKey
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -36,7 +37,7 @@ class HistoryEditTest {
     private lateinit var service: MedicationService
 
     @Before fun setUp() {
-        context.deleteDatabase("hist-test.db"); keys.deleteAllKeyMaterial()
+        context.deleteDatabase("hist-test.db"); deleteTestKey(context, "hist_test_key")
         db = AppDatabase.open(context, keys, "hist-test.db")
         val time = TimeProvider()
         val audit = AuditLogger(db.auditLogDao(), time)
@@ -46,7 +47,7 @@ class HistoryEditTest {
         actions = DoseActionService(doses, meds, time) {}
     }
 
-    @After fun tearDown() { db.close(); context.deleteDatabase("hist-test.db"); keys.deleteAllKeyMaterial() }
+    @After fun tearDown() { db.close(); context.deleteDatabase("hist-test.db"); deleteTestKey(context, "hist_test_key") }
 
     private suspend fun missedDose(): Long {
         service.create(MedicationForm(purpose = com.remedicord.domain.model.MedicationPurpose.OTHER, purposeNote = "test", name = "Hist", type = MedicationType.PILL, rule = ScheduleRule.FixedTimes(listOf(LocalTime.of(8, 0)))))
@@ -67,12 +68,11 @@ class HistoryEditTest {
         assertFalse(actions.edit(id, DoseStatus.TAKEN, null, "x".repeat(501)))
     }
 
-    @Test fun lateLogOnlyForMissedAndNotInFuture() = runTest {
+    @Test fun takenAfterMissedIsMarkedRecordedAfterwards() = runTest {
         val id = missedDose()
-        assertFalse(actions.logLate(id, Instant.now().plus(Duration.ofMinutes(5))))
-        assertTrue(actions.logLate(id, Instant.now().minus(Duration.ofHours(1))))
+        assertFalse(actions.edit(id, DoseStatus.TAKEN, Instant.now().plus(Duration.ofMinutes(5)), null)) // future time
+        assertTrue(actions.edit(id, DoseStatus.TAKEN, Instant.now().minus(Duration.ofHours(1)), null))
         assertTrue(db.doseEventDao().get(id)!!.isLateLog)
-        assertFalse(actions.logLate(id, Instant.now()))
     }
 
     @Test fun asNeededRecordsAndWarnsOnLimits() = runTest {

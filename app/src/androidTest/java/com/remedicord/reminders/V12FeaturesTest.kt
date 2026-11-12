@@ -1,5 +1,6 @@
 package com.remedicord.reminders
 
+import com.remedicord.deleteTestKey
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -49,7 +50,7 @@ class V12FeaturesTest {
     private lateinit var actions: DoseActionService
 
     @Before fun setUp() {
-        context.deleteDatabase("v12-test.db"); keys.deleteAllKeyMaterial()
+        context.deleteDatabase("v12-test.db"); deleteTestKey(context, "v12_test_key")
         db = AppDatabase.open(context, keys, "v12-test.db")
         val time = TimeProvider()
         val audit = AuditLogger(db.auditLogDao(), time)
@@ -60,7 +61,7 @@ class V12FeaturesTest {
         actions = DoseActionService(doses, meds, time, planner)
     }
 
-    @After fun tearDown() { db.close(); context.deleteDatabase("v12-test.db"); keys.deleteAllKeyMaterial() }
+    @After fun tearDown() { db.close(); context.deleteDatabase("v12-test.db"); deleteTestKey(context, "v12_test_key") }
 
     private fun soon(min: Long) = LocalTime.now(ZoneId.systemDefault()).plusMinutes(min).withSecond(0).withNano(0)
     private suspend fun create(name: String, must: Boolean = false, rule: ScheduleRule = ScheduleRule.FixedTimes(listOf(soon(30)))): Long {
@@ -106,9 +107,10 @@ class V12FeaturesTest {
         assertTrue(actions.take(dose.id))
         val info = service.deleteInfo(id)!!
         assertTrue(info.startedMustComplete)
-        assertTrue(service.delete(id, "Amoxicillin", warningAcknowledged = false) is ActionResult.NeedsConfirmation)
-        assertTrue(service.delete(id, "Amoxicilin", warningAcknowledged = true) is ActionResult.Invalid) // typo
-        assertEquals(ActionResult.Done, service.delete(id, "amoxicillin", warningAcknowledged = true))
+        assertTrue(service.delete(id, "Delete", warningAcknowledged = false) is ActionResult.NeedsConfirmation)
+        assertTrue(service.delete(id, "Amoxicillin", warningAcknowledged = true) is ActionResult.Invalid) // the name is no longer the word
+        assertTrue(service.delete(id, "Delet", warningAcknowledged = true) is ActionResult.Invalid)
+        assertEquals(ActionResult.Done, service.delete(id, "delete", warningAcknowledged = true))
         assertNull(db.medicationDao().get(id))
         assertEquals(0, db.doseEventDao().forMedication(id).size)
         assertEquals(0, db.regimenDao().forMedication(id).size)
@@ -120,7 +122,7 @@ class V12FeaturesTest {
     @Test fun normalMedicineDeletesWithoutTheExtraWarning() = runTest {
         val id = create("Wrong one")
         assertFalse(service.deleteInfo(id)!!.startedMustComplete)
-        assertEquals(ActionResult.Done, service.delete(id, "Wrong one", warningAcknowledged = false))
+        assertEquals(ActionResult.Done, service.delete(id, "Delete", warningAcknowledged = false))
     }
 
     @Test fun undoRestoresTheDoseExactly() = runTest {

@@ -124,12 +124,6 @@ class DbKeyManager(
         }
     }
 
-    /** Test/support helper: removes both the key file and the Keystore entry. */
-    internal fun deleteAllKeyMaterial() {
-        keyFile.delete()
-        KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(keyAlias)
-    }
-
     companion object {
         const val DEFAULT_ALIAS = "remedicord_db_key_wrapper"
         const val DEFAULT_KEY_FILE = "db_key.bin"

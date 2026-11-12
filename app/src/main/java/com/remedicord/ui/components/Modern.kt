@@ -83,7 +83,6 @@ object MedIcons {
         }
     }.build()
 
-    private val tablet = icon("tablet", "M4,12a8,8 0 1,0 16,0a8,8 0 1,0 -16,0", "M6.5,6.5l11,11")
     private val pill = icon("pill", "M10.5,3.5a5,5 0 0,1 7,7l-7,7a5,5 0 0,1 -7,-7z", "M7,7l7,7")
     private val liquid = icon("liquid", "M9,2h6v3h-6z", "M8,5h8l1,3v12a2,2 0 0,1 -2,2h-6a2,2 0 0,1 -2,-2v-12z", "M7,12h10")
     private val drop = icon("drop", "M12,3c0,0 6,6.6 6,11a6,6 0 0,1 -12,0c0,-4.4 6,-11 6,-11z")
@@ -105,9 +104,6 @@ object MedIcons {
         MedicationType.PATCH -> patch
         MedicationType.BANDAGE -> bandage
     }
-
-    /** Tablets read better as a round tablet than a capsule when the unit is TABLET. */
-    val roundTablet: ImageVector get() = tablet
 }
 
 /** 8 soft medicine colours (E8). Mid-tones that carry a white icon in both light and dark mode. */

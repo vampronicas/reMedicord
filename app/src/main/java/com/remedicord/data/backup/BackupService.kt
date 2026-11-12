@@ -27,6 +27,8 @@ class BackupService(
     private val replanner: Replanner,
     private val time: TimeProvider,
     private val appVersion: String,
+    /** Applies restored settings that live outside the database (e.g. the app-lock timeout in memory). */
+    private val applyRestoredSettings: suspend () -> Unit = {},
 ) {
     data class Preview(val exportedAt: Instant, val medications: Int, val doses: Int, val appVersion: String)
 
@@ -41,6 +43,8 @@ class BackupService(
     }
 
     suspend fun export(out: OutputStream) = withContext(Dispatchers.IO) {
+        // The reminder sound lives in Android's notification channel, not the database: record it so it's backed up.
+        settings.put(SOUND_KEY, com.remedicord.reminders.Notifications.currentSound(context).name)
         val files = BackupCodec.encode(snapshot(), appVersion, schemaVersion, time.nowMillis(), time.zone())
         out.use { BackupCodec.writeZip(files, it) }
         settings.put(LAST_BACKUP, time.nowMillis().toString())
@@ -73,7 +77,18 @@ class BackupService(
             // Fill the gap from the export time to now as UNCONFIRMED (PLAN.md §4.6).
             settings.put(ReminderSettingsRepository.PLANNED_UNTIL, m.exportedAt.toString())
         }
+        applySettings()
         replanner.replan()
+    }
+
+    /** Makes restored settings take effect now: reminder sound (notification channel) and app-lock timeout. */
+    private suspend fun applySettings() {
+        settings.get(SOUND_KEY)?.let { key ->
+            com.remedicord.reminders.Notifications.ReminderSound.entries.firstOrNull { it.name == key }?.let { sound ->
+                if (com.remedicord.reminders.Notifications.currentSound(context) != sound) com.remedicord.reminders.Notifications.setReminderSound(context, sound)
+            }
+        }
+        applyRestoredSettings()
     }
 
     // ------------------------------------------------------------ snapshots (private, last 3)
@@ -121,6 +136,8 @@ class BackupService(
         const val REMINDER_DAYS = "backup.reminderDays"
         const val LAST_REMINDED = "backup.lastRemindedAt"
         const val FIRST_SEEN = "backup.firstSeenAt"
+        /** Reminder sound choice, copied from the notification channel so it travels with backups. */
+        const val SOUND_KEY = "reminder.sound"
         val REMINDER_CHOICES = listOf(0, 7, 14, 30)
     }
 }

@@ -1,23 +1,18 @@
 package com.remedicord.domain.model
 
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.ZoneId
 
-/** A regimen as the domain sees it (decoded rule, Instants). */
+/** A regimen as the schedule sees it (decoded rule, Instants). The dose amount stays on the database row. */
 data class Regimen(
     val id: Long,
     val effectiveFrom: Instant,
     val effectiveTo: Instant?,
     val rule: ScheduleRule,
-    val amount: BigDecimal,
-    val unit: DoseUnit,
-) {
-    fun isActiveAt(at: Instant) = !at.isBefore(effectiveFrom) && (effectiveTo == null || at.isBefore(effectiveTo))
-}
+)
 
 /** One generated dose occurrence. */
-data class PlannedDose(val regimenId: Long, val at: Instant, val zone: ZoneId)
+data class PlannedDose(val regimenId: Long, val at: Instant)
 
 /** Where in time a medication's schedule lives (PLAN.md §4.9). */
 data class ZoneSettings(val mode: TimeZoneMode, val homeZone: ZoneId?) {

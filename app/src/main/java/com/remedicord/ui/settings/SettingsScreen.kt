@@ -56,6 +56,7 @@ class SettingsViewModel @Inject constructor(
     fun setSound(s: com.remedicord.reminders.Notifications.ReminderSound) {
         com.remedicord.reminders.Notifications.setReminderSound(context, s)
         _sound.value = s
+        viewModelScope.launch { settings.put(com.remedicord.data.backup.BackupService.SOUND_KEY, s.name) }
     }
 
     /** Plays a short preview of the chosen sound. */

@@ -1,5 +1,6 @@
 package com.remedicord.reminders
 
+import com.remedicord.deleteTestKey
 import android.app.NotificationManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
@@ -43,7 +44,7 @@ class V13FeaturesTest {
     private lateinit var meds: MedicationRepository
 
     @Before fun setUp() {
-        context.deleteDatabase("v13-test.db"); keys.deleteAllKeyMaterial()
+        context.deleteDatabase("v13-test.db"); deleteTestKey(context, "v13_test_key")
         db = AppDatabase.open(context, keys, "v13-test.db")
         val time = TimeProvider()
         val audit = AuditLogger(db.auditLogDao(), time)
@@ -56,7 +57,7 @@ class V13FeaturesTest {
         support = RecordSupport(actions, doses, db.auditLogDao(), ReminderSettingsRepository(settings), time)
     }
 
-    @After fun tearDown() { db.close(); context.deleteDatabase("v13-test.db"); keys.deleteAllKeyMaterial() }
+    @After fun tearDown() { db.close(); context.deleteDatabase("v13-test.db"); deleteTestKey(context, "v13_test_key") }
 
     private fun soon(min: Long) = LocalTime.now(ZoneId.systemDefault()).plusMinutes(min).withSecond(0).withNano(0)
     private suspend fun create(name: String, at: LocalTime): Long {

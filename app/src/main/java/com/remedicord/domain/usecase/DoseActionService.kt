@@ -105,18 +105,6 @@ class DoseActionService(
         return AmendPolicy.canAmend(Instant.ofEpochMilli(at).atZone(time.zone()).toLocalDate(), java.time.LocalDate.now(time.zone()))
     }
 
-    /** "I took it at hh:mm" for a MISSED (or UNCONFIRMED) dose. The time can't be in the future. */
-    suspend fun logLate(doseId: Long, takenAt: Instant): Boolean {
-        val d = doses.get(doseId) ?: return false
-        if (d.status != DoseStatus.MISSED && d.status != DoseStatus.UNCONFIRMED) return false
-        if (!amendable(d)) return false
-        if (takenAt.isAfter(time.now())) return false
-        doses.update(d.copy(status = DoseStatus.TAKEN, takenAt = takenAt.toEpochMilli(), actionAt = time.nowMillis(), isLateLog = true,
-            site = d.site ?: suggestSite(d.medicationId)), "Logged late")
-        replanner.replan()
-        return true
-    }
-
     enum class ReviewAnswer { TAKEN, MISSED, SKIPPED }
 
     /** Answer for an UNCONFIRMED dose from the review prompt (PLAN.md S14). */

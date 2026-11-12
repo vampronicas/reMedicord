@@ -1,5 +1,6 @@
 package com.remedicord.data.backup
 
+import com.remedicord.core.lock.AppLockManager
 import com.remedicord.data.db.entity.AuditLogEntity
 import com.remedicord.data.db.entity.DoseEventEntity
 import com.remedicord.data.db.entity.MedicationEntity
@@ -8,6 +9,8 @@ import com.remedicord.data.db.entity.SettingEntity
 import com.remedicord.data.db.entity.SkipRuleEntity
 import com.remedicord.domain.model.ScheduleRule
 import com.remedicord.domain.usecase.FormValidator
+import com.remedicord.reminders.Notifications
+import com.remedicord.reminders.ReminderSettingsRepository
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -23,6 +26,10 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /** Reason shown to the user when a backup file is rejected. Nothing is changed when this is thrown. */
 class BackupException(message: String) : Exception(message)
@@ -70,21 +77,42 @@ object BackupCodec {
     private val DATA_FILES = listOf(SETTINGS, MEDICATIONS, REGIMENS, DOSES, SKIP_RULES, AUDIT, CSV)
     val ALLOWED = setOf(MANIFEST) + DATA_FILES
 
-    /** Settings that describe this phone, not the user's data: never exported, never imported. */
-    private val DEVICE_PREFIXES = listOf("private.", "planner.", "onboarding.", "backup.")
+    /**
+     * The ONLY settings a backup may carry, each with its allowed values (the same choices the Settings screen offers).
+     * Everything else (PIN, planner state, onboarding, backup bookkeeping, unknown keys) is never exported, and a
+     * backup containing it, or an out-of-range value, is rejected. So a crafted file can't e.g. disable the app lock.
+     */
+    private val SETTING_RULES: Map<String, (String) -> Boolean> = mapOf(
+        ReminderSettingsRepository.SNOOZE to intIn(1..60),
+        ReminderSettingsRepository.MAX_SNOOZES to intIn(0..10),
+        ReminderSettingsRepository.REPEAT to intIn(1..60),
+        ReminderSettingsRepository.MAX_REPEATS to intIn(0..10),
+        ReminderSettingsRepository.EYE_GAP to intIn(1..30),
+        ReminderSettingsRepository.FULL_SCREEN to { v -> v == "true" || v == "false" },
+        BackupService.SOUND_KEY to { v -> Notifications.ReminderSound.entries.any { it.name == v } },
+        AppLockManager.SETTING_TIMEOUT_MIN to { v -> v.toIntOrNull() in AppLockManager.TIMEOUT_CHOICES_MIN },
+        BackupService.REMINDER_DAYS to { v -> v.toIntOrNull() in BackupService.REMINDER_CHOICES },
+    )
+
+    private fun intIn(range: IntRange): (String) -> Boolean = { v -> v.toIntOrNull()?.let { it in range } == true }
 
     data class Limits(val maxEntryBytes: Long = 100L * 1024 * 1024, val maxTotalBytes: Long = 250L * 1024 * 1024, val maxRows: Int = 1_000_000)
 
     private val json = Json { encodeDefaults = true; prettyPrint = false }
     private val strict = Json { ignoreUnknownKeys = false; isLenient = false; encodeDefaults = true }
 
-    fun isExportableSetting(key: String) = DEVICE_PREFIXES.none { key.startsWith(it) }
+    fun isExportableSetting(key: String) = key in SETTING_RULES
+
+    /** True if this setting may be backed up/restored with this value. */
+    fun isValidSetting(key: String, value: String) = SETTING_RULES[key]?.invoke(value) == true
+
+    private fun exportable(settings: List<SettingEntity>) = settings.filter { isValidSetting(it.key, it.value) }
 
     // ---------------------------------------------------------------- export
 
     fun encode(s: BackupSnapshot, appVersion: String, schemaVersion: Int, exportedAt: Long, zone: ZoneId): Map<String, ByteArray> {
         val files = linkedMapOf(
-            SETTINGS to enc(ListSerializer(SettingEntity.serializer()), s.settings.filter { isExportableSetting(it.key) }),
+            SETTINGS to enc(ListSerializer(SettingEntity.serializer()), exportable(s.settings)),
             MEDICATIONS to enc(ListSerializer(MedicationEntity.serializer()), s.medications),
             REGIMENS to enc(ListSerializer(RegimenEntity.serializer()), s.regimens),
             DOSES to enc(ListSerializer(DoseEventEntity.serializer()), s.doses),
@@ -94,7 +122,7 @@ object BackupCodec {
         )
         val manifest = BackupManifest(
             FORMAT, FORMAT_VERSION, appVersion, schemaVersion, exportedAt,
-            counts = mapOf("settings" to s.settings.count { isExportableSetting(it.key) }, "medications" to s.medications.size,
+            counts = mapOf("settings" to exportable(s.settings).size, "medications" to s.medications.size,
                 "regimens" to s.regimens.size, "doses" to s.doses.size, "skipRules" to s.skipRules.size, "audit" to s.audit.size),
             sha256 = files.mapValues { sha256(it.value) },
         )
@@ -203,6 +231,7 @@ object BackupCodec {
         s.settings.forEach {
             if (!SETTING_KEY.matches(it.key) || !isExportableSetting(it.key)) fail("setting key")
             text(it.value, 1000, "setting value")
+            if (!isValidSetting(it.key, it.value)) fail("setting value")
         }
         if (s.settings.map { it.key }.toSet().size != s.settings.size) fail("duplicate setting")
 
@@ -256,7 +285,26 @@ object BackupCodec {
         s.audit.forEach { a ->
             if (a.entityType !in ENTITY_TYPES) fail("audit type")
             if ((a.beforeJson?.length ?: 0) > 100_000 || (a.afterJson?.length ?: 0) > 100_000) fail("audit size")
+            cleanJson(a.beforeJson, "audit details"); cleanJson(a.afterJson, "audit details")
             text(a.note, FormValidator.MAX_TEXT, "audit note", newlines = true)
+        }
+    }
+
+    /**
+     * Change-history details are shown in the app, so they get the same text rules as every other field:
+     * valid JSON, and no control or text-direction characters in any key or value (they could disguise text).
+     * Walked with an explicit stack, so deeply nested input can't overflow the call stack.
+     */
+    private fun cleanJson(s: String?, field: String) {
+        if (s == null) return
+        val root = try { Json.parseToJsonElement(s) } catch (_: Exception) { fail(field) }
+        val stack = ArrayDeque<JsonElement>().apply { add(root) }
+        while (stack.isNotEmpty()) {
+            when (val e = stack.removeLast()) {
+                is JsonObject -> e.forEach { (k, v) -> if (!FormValidator.cleanText(k)) fail(field); stack.add(v) }
+                is JsonArray -> stack.addAll(e)
+                is JsonPrimitive -> if (e.isString && !FormValidator.cleanText(e.content, allowNewlines = true)) fail(field)
+            }
         }
     }
 
